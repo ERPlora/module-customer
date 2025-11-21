@@ -1,0 +1,49 @@
+{
+  "plugin_id": "customers",
+  "name": "Customer Management",
+  "name_es": "Gestión de Clientes",
+  "version": "1.0.0",
+  "description": "Manage customers with purchase history and statistics",
+  "description_es": "Gestión de clientes con historial de compras y estadísticas",
+  "author": "ERPlora Team",
+  "icon": "people-outline",
+  "category": "crm",
+
+  "dependencies": {
+    "python": [],
+    "plugins": []
+  },
+
+  "compatibility": {
+    "min_erplora_version": "1.0.0",
+    "max_erplora_version": "2.0.0"
+  },
+
+  "menu": {
+    "label": "Customers",
+    "label_es": "Clientes",
+    "icon": "people-outline",
+    "order": 10,
+    "items": [
+      {
+        "label": "Customer List",
+        "label_es": "Lista de Clientes",
+        "url": "/plugins/customers/",
+        "icon": "list-outline"
+      },
+      {
+        "label": "Add Customer",
+        "label_es": "Añadir Cliente",
+        "url": "/plugins/customers/create/",
+        "icon": "person-add-outline"
+      }
+    ]
+  },
+
+  "permissions": [
+    "customers.view_customer",
+    "customers.add_customer",
+    "customers.change_customer",
+    "customers.delete_customer"
+  ]
+}
