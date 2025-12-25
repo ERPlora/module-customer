@@ -214,7 +214,7 @@ function customerForm() {
                         {% trans "Cancelar" %}
                     </ion-button>
 
-                    <ion-button type="submit" :disabled="saving">
+                    <ion-button type="submit" :disabled="saving" color="success">
                         <ion-spinner x-show="saving" name="crescent" style="width: 20px; height: 20px;"></ion-spinner>
                         <ion-icon x-show="!saving" slot="start" name="checkmark-outline"></ion-icon>
                         <span x-text="saving ? '{% trans "Guardando..." %}' : '{% trans "Guardar" %}'"></span>

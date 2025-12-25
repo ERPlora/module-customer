@@ -93,6 +93,7 @@
                     <p class="mt-4">{% trans "No se encontraron clientes" %}</p>
                     <ion-button
                         class="mt-4"
+                        color="success"
                         hx-get="{% url 'customers:create' %}"
                         hx-target="#dashboard-content"
                         hx-push-url="true">
