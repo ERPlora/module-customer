@@ -30,6 +30,7 @@
             </p>
         </div>
         <ion-button
+            color="success"
             hx-get="{% url 'customers:edit' customer_id=customer.id %}"
             hx-target="#dashboard-content"
             hx-push-url="true">
