@@ -103,17 +103,17 @@
                 </div>
             </template>
 
-            <!-- Table -->
+            <!-- Table with Infinite Scroll -->
             <template x-if="!loading && customers.length > 0">
-                <div class="overflow-x-auto">
+                <div class="scroll-ios scroll-list" style="max-height: calc(100vh - 400px);" @scroll="handleScroll($event)">
                     <table class="w-full">
-                        <thead>
+                        <thead style="position: sticky; top: 0; z-index: 10;">
                             <tr style="background: var(--ion-color-light); border-bottom: 1px solid var(--ion-border-color);">
                                 <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Nombre" %}</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Contacto" %}</th>
                                 <th class="px-4 py-3 text-right text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Total Gastado" %}</th>
                                 <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Visitas" %}</th>
-                                <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Última Compra" %}</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Ultima Compra" %}</th>
                                 <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Acciones" %}</th>
                             </tr>
                         </thead>
@@ -172,6 +172,15 @@
                             </template>
                         </tbody>
                     </table>
+                    <!-- Infinite scroll loader -->
+                    <template x-if="loadingMore">
+                        <div class="infinite-scroll-loader">
+                            <ion-spinner name="crescent"></ion-spinner>
+                        </div>
+                    </template>
+                    <template x-if="!hasNext && !loadingMore && customers.length > 0">
+                        <div class="infinite-scroll-end" x-text="totalCount + ' {% trans "clientes" %}'"></div>
+                    </template>
                 </div>
             </template>
         </ion-card-content>
@@ -183,9 +192,13 @@ function customerList() {
     return {
         customers: [],
         loading: true,
+        loadingMore: false,
         searchQuery: '',
         statusFilter: 'active',
         searchTimeout: null,
+        currentPage: 1,
+        hasNext: false,
+        totalCount: 0,
 
         init() {
             this.loadCustomers();
@@ -194,21 +207,26 @@ function customerList() {
         debouncedSearch() {
             clearTimeout(this.searchTimeout);
             this.searchTimeout = setTimeout(() => {
+                this.currentPage = 1;
                 this.loadCustomers();
             }, 300);
         },
 
         async loadCustomers() {
             this.loading = true;
+            this.currentPage = 1;
             try {
                 const params = new URLSearchParams({
                     search: this.searchQuery,
-                    status: this.statusFilter
+                    status: this.statusFilter,
+                    page: this.currentPage
                 });
                 const response = await fetch(`{% url 'customers:list_ajax' %}?${params}`);
                 const data = await response.json();
                 if (data.success) {
                     this.customers = data.customers;
+                    this.hasNext = data.has_next;
+                    this.totalCount = data.total_count;
                     // Re-process HTMX on dynamic content
                     this.$nextTick(() => htmx.process(this.$el));
                 }
@@ -216,6 +234,42 @@ function customerList() {
                 console.error('Error loading customers:', error);
             } finally {
                 this.loading = false;
+            }
+        },
+
+        async loadMore() {
+            if (this.loadingMore || !this.hasNext) return;
+
+            this.loadingMore = true;
+            this.currentPage++;
+
+            try {
+                const params = new URLSearchParams({
+                    search: this.searchQuery,
+                    status: this.statusFilter,
+                    page: this.currentPage
+                });
+                const response = await fetch(`{% url 'customers:list_ajax' %}?${params}`);
+                const data = await response.json();
+                if (data.success) {
+                    this.customers = [...this.customers, ...data.customers];
+                    this.hasNext = data.has_next;
+                    // Re-process HTMX on dynamic content
+                    this.$nextTick(() => htmx.process(this.$el));
+                }
+            } catch (error) {
+                console.error('Error loading more customers:', error);
+                this.currentPage--;
+            } finally {
+                this.loadingMore = false;
+            }
+        },
+
+        handleScroll(event) {
+            const el = event.target;
+            const threshold = 100;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < threshold) {
+                this.loadMore();
             }
         },
 
@@ -229,7 +283,7 @@ function customerList() {
         async confirmDelete(customer) {
             const alert = document.createElement('ion-alert');
             alert.header = '{% trans "Confirmar" %}';
-            alert.message = `{% trans "¿Desactivar cliente" %} "${customer.name}"?`;
+            alert.message = `{% trans "Desactivar cliente" %} "${customer.name}"?`;
             alert.buttons = [
                 {
                     text: '{% trans "Cancelar" %}',

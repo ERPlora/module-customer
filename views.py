@@ -29,8 +29,10 @@ def customer_list(request):
 @require_http_methods(["GET"])
 def customer_list_ajax(request):
     """
-    API: Lista de clientes para AJAX.
+    API: Lista de clientes para AJAX con infinite scroll.
     """
+    from apps.core.htmx import InfiniteScrollPaginator
+
     search = request.GET.get('search', '').strip()
     status_filter = request.GET.get('status', 'active')  # active, inactive, all
 
@@ -54,9 +56,14 @@ def customer_list_ajax(request):
     # Order
     customers = customers.order_by('-created_at')
 
+    # Pagination with infinite scroll
+    per_page = int(request.GET.get('per_page', '25'))
+    paginator = InfiniteScrollPaginator(customers, per_page=per_page)
+    page_data = paginator.get_page(request.GET.get('page', 1))
+
     # Prepare data
     customers_data = []
-    for customer in customers[:100]:  # Limit to 100
+    for customer in page_data['items']:
         customers_data.append({
             'id': customer.id,
             'name': customer.name,
@@ -71,7 +78,14 @@ def customer_list_ajax(request):
             'created_at': customer.created_at.strftime('%Y-%m-%d'),
         })
 
-    return JsonResponse({'success': True, 'customers': customers_data})
+    return JsonResponse({
+        'success': True,
+        'customers': customers_data,
+        'has_next': page_data['has_next'],
+        'next_page': page_data['next_page'],
+        'total_count': page_data['total_count'],
+        'page_number': page_data['page_number'],
+    })
 
 
 @require_http_methods(["GET", "POST"])
