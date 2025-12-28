@@ -9,7 +9,25 @@
   "author_email": "support@erplora.com",
   "license": "MIT",
   "category": "crm",
-  "tags": ["customers", "crm", "contacts", "clients", "management"],
+  "industries": [
+    "retail",
+    "wholesale",
+    "ecommerce",
+    "restaurant",
+    "bar",
+    "cafe",
+    "hotel",
+    "salon",
+    "healthcare",
+    "professional"
+  ],
+  "tags": [
+    "customers",
+    "crm",
+    "contacts",
+    "clients",
+    "management"
+  ],
   "icon": "people-outline",
   "dependencies": {
     "python": [],
