@@ -257,3 +257,76 @@ class TestCustomerExportView:
         content = response.content.decode('utf-8')
         assert 'Test Customer' in content
         assert 'test@example.com' in content
+
+
+@pytest.mark.django_db
+class TestSettingsView:
+    """Tests for customers settings."""
+
+    def test_settings_view_get(self, client):
+        """Test GET settings page."""
+        response = client.get('/modules/customers/settings/')
+        # Either 200 (if no login required in test) or redirect
+        assert response.status_code in [200, 302]
+
+    def test_settings_save_success(self, client):
+        """Test saving settings via JSON."""
+        from customers.models import CustomersConfig
+
+        response = client.post(
+            '/modules/customers/settings/save/',
+            data=json.dumps({
+                'require_phone': True,
+                'require_email': False,
+                'require_tax_id': True,
+                'show_inactive': True,
+                'default_sort': 'created_desc',
+                'include_stats_in_export': False
+            }),
+            content_type='application/json'
+        )
+
+        # May require login
+        assert response.status_code in [200, 302]
+
+        if response.status_code == 200:
+            data = json.loads(response.content)
+            assert data['success'] is True
+
+    def test_settings_save_invalid_json(self, client):
+        """Test saving with invalid JSON."""
+        response = client.post(
+            '/modules/customers/settings/save/',
+            data='invalid json',
+            content_type='application/json'
+        )
+
+        # May require login or return 400
+        assert response.status_code in [400, 302]
+
+    def test_settings_persist(self, client):
+        """Test settings are persisted."""
+        from customers.models import CustomersConfig
+
+        response = client.post(
+            '/modules/customers/settings/save/',
+            data=json.dumps({
+                'require_phone': True,
+                'require_email': True,
+                'require_tax_id': False,
+                'show_inactive': False,
+                'default_sort': 'name',
+                'include_stats_in_export': True
+            }),
+            content_type='application/json'
+        )
+
+        # Verify persisted values (if login not required)
+        if response.status_code == 200:
+            config = CustomersConfig.get_config()
+            assert config.require_phone is True
+            assert config.require_email is True
+            assert config.require_tax_id is False
+            assert config.show_inactive is False
+            assert config.default_sort == 'name'
+            assert config.include_stats_in_export is True

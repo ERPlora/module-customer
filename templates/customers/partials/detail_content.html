@@ -1,195 +1,183 @@
-{% load i18n %}
+{% load i18n ui %}
 
 {% if request.htmx %}
-<!-- Tab bar update via OOB swap (only on HTMX navigation) -->
-<div id="dashboard-tabbar" hx-swap-oob="innerHTML">
-<ion-footer>
-{% include "customers/partials/tabbar_customer.html" %}
+{# Tab bar update via OOB swap (only on HTMX navigation) #}
+<ion-footer id="dashboard-tabbar" hx-swap-oob="outerHTML">
+{% include "customers/partials/tabbar_customer.html" with current_view='list' %}
 </ion-footer>
-</div>
 {% endif %}
 
-<div class="p-4">
-    <!-- Header with back button -->
-    <div class="flex items-center gap-4 mb-6">
-        <ion-button fill="clear"
-                    hx-get="{% url 'customers:list' %}"
-                    hx-target="#dashboard-content"
-                    hx-push-url="true">
-            <ion-icon slot="icon-only" name="arrow-back-outline"></ion-icon>
-        </ion-button>
-        <div class="flex-1">
-            <h1 class="text-2xl font-bold" style="color: var(--ion-text-color);">{{ customer.name }}</h1>
-            <p class="text-sm" style="color: var(--ion-color-medium);">
-                {% if customer.is_active %}
-                    <ion-badge color="success">{% trans "Activo" %}</ion-badge>
-                {% else %}
-                    <ion-badge color="medium">{% trans "Inactivo" %}</ion-badge>
-                {% endif %}
-                {% if customer.tax_id %} | {{ customer.tax_id }}{% endif %}
-            </p>
-        </div>
-        <ion-button
-            color="success"
-            hx-get="{% url 'customers:edit' customer_id=customer.id %}"
-            hx-target="#dashboard-content"
-            hx-push-url="true">
-            <ion-icon slot="start" name="create-outline"></ion-icon>
-            {% trans "Editar" %}
-        </ion-button>
+{% ui_page_header title=customer.name action_icon="create-outline" action_label=_("Edit") action_hx_get="/modules/customers/"|add:customer.id|add:"/edit/" action_hx_target="#main-content-area" action_hx_push_url="true" %}
+
+<div class="ion-padding">
+    {# Customer Status Badge #}
+    <div class="mb-md">
+        {% if customer.is_active %}
+        <ion-badge color="success">{% trans "Active" %}</ion-badge>
+        {% else %}
+        <ion-badge color="medium">{% trans "Inactive" %}</ion-badge>
+        {% endif %}
+        {% if customer.tax_id %}<span class="ml-sm text-secondary">{{ customer.tax_id }}</span>{% endif %}
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left Column: Customer Info -->
-        <div class="lg:col-span-1">
-            <!-- Contact Card -->
-            <ion-card>
-                <ion-card-header>
-                    <ion-card-title>{% trans "Información de Contacto" %}</ion-card-title>
-                </ion-card-header>
-                <ion-card-content>
-                    <ion-list lines="none">
-                        <ion-item>
-                            <ion-icon name="call-outline" slot="start" style="color: var(--ion-color-primary);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "Teléfono" %}</p>
-                                <h3 style="color: var(--ion-text-color);">{{ customer.phone|default:"—" }}</h3>
-                            </ion-label>
-                            {% if customer.phone %}
-                            <ion-button slot="end" fill="clear" href="tel:{{ customer.phone }}">
-                                <ion-icon slot="icon-only" name="call"></ion-icon>
-                            </ion-button>
-                            {% endif %}
-                        </ion-item>
-
-                        <ion-item>
-                            <ion-icon name="mail-outline" slot="start" style="color: var(--ion-color-primary);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "Email" %}</p>
-                                <h3 style="color: var(--ion-text-color);">{{ customer.email|default:"—" }}</h3>
-                            </ion-label>
-                            {% if customer.email %}
-                            <ion-button slot="end" fill="clear" href="mailto:{{ customer.email }}">
-                                <ion-icon slot="icon-only" name="mail"></ion-icon>
-                            </ion-button>
-                            {% endif %}
-                        </ion-item>
-
-                        <ion-item>
-                            <ion-icon name="location-outline" slot="start" style="color: var(--ion-color-primary);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "Dirección" %}</p>
-                                <h3 style="color: var(--ion-text-color); white-space: pre-wrap;">{{ customer.address|default:"—" }}</h3>
-                            </ion-label>
-                        </ion-item>
-
-                        <ion-item>
-                            <ion-icon name="document-text-outline" slot="start" style="color: var(--ion-color-primary);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "NIF/CIF" %}</p>
-                                <h3 style="color: var(--ion-text-color);">{{ customer.tax_id|default:"—" }}</h3>
-                            </ion-label>
-                        </ion-item>
-                    </ion-list>
-                </ion-card-content>
-            </ion-card>
-
-            <!-- Notes Card -->
-            {% if customer.notes %}
-            <ion-card>
-                <ion-card-header>
-                    <ion-card-title>{% trans "Notas" %}</ion-card-title>
-                </ion-card-header>
-                <ion-card-content>
-                    <p style="color: var(--ion-text-color); white-space: pre-wrap;">{{ customer.notes }}</p>
-                </ion-card-content>
-            </ion-card>
-            {% endif %}
-
-            <!-- Dates Card -->
-            <ion-card>
-                <ion-card-header>
-                    <ion-card-title>{% trans "Fechas" %}</ion-card-title>
-                </ion-card-header>
-                <ion-card-content>
-                    <ion-list lines="none">
-                        <ion-item>
-                            <ion-icon name="calendar-outline" slot="start" style="color: var(--ion-color-medium);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "Cliente desde" %}</p>
-                                <h3 style="color: var(--ion-text-color);">{{ customer.created_at|date:"d/m/Y" }}</h3>
-                            </ion-label>
-                        </ion-item>
-                        <ion-item>
-                            <ion-icon name="time-outline" slot="start" style="color: var(--ion-color-medium);"></ion-icon>
-                            <ion-label>
-                                <p style="color: var(--ion-color-medium);">{% trans "Última actualización" %}</p>
-                                <h3 style="color: var(--ion-text-color);">{{ customer.updated_at|date:"d/m/Y H:i" }}</h3>
-                            </ion-label>
-                        </ion-item>
-                    </ion-list>
-                </ion-card-content>
-            </ion-card>
-        </div>
-
-        <!-- Right Column: Stats & History -->
-        <div class="lg:col-span-2">
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <ion-card>
-                    <ion-card-content class="text-center">
-                        <ion-icon name="cash-outline" style="font-size: 32px; color: var(--ion-color-success);"></ion-icon>
-                        <p class="text-sm mt-2" style="color: var(--ion-color-medium);">{% trans "Total Gastado" %}</p>
-                        <p class="text-2xl font-bold" style="color: var(--ion-color-success);">{{ customer.total_spent|floatformat:2 }} €</p>
-                    </ion-card-content>
-                </ion-card>
-
-                <ion-card>
-                    <ion-card-content class="text-center">
-                        <ion-icon name="repeat-outline" style="font-size: 32px; color: var(--ion-color-primary);"></ion-icon>
-                        <p class="text-sm mt-2" style="color: var(--ion-color-medium);">{% trans "Visitas" %}</p>
-                        <p class="text-2xl font-bold" style="color: var(--ion-color-primary);">{{ customer.visit_count }}</p>
-                    </ion-card-content>
-                </ion-card>
-
-                <ion-card>
-                    <ion-card-content class="text-center">
-                        <ion-icon name="analytics-outline" style="font-size: 32px; color: var(--ion-color-tertiary);"></ion-icon>
-                        <p class="text-sm mt-2" style="color: var(--ion-color-medium);">{% trans "Media por Compra" %}</p>
-                        <p class="text-2xl font-bold" style="color: var(--ion-color-tertiary);">{{ customer.average_purchase|floatformat:2 }} €</p>
-                    </ion-card-content>
-                </ion-card>
+<div class="customer-detail-grid">
+    {# Left Column: Customer Info #}
+    <div class="customer-detail-sidebar">
+        {# Contact Card #}
+        {% ui_card %}
+            <div class="d-flex justify-between align-center mb-md">
+                <span class="fw-semibold fs-lg">{% trans "Contact Information" %}</span>
             </div>
 
-            <!-- Recent Purchases -->
-            <ion-card>
-                <ion-card-header>
-                    <ion-card-title>{% trans "Compras Recientes" %}</ion-card-title>
-                </ion-card-header>
-                <ion-card-content class="p-0">
-                    {% if recent_purchases %}
-                    <ion-list>
-                        {% for sale in recent_purchases %}
-                        <ion-item>
-                            <ion-icon name="receipt-outline" slot="start" style="color: var(--ion-color-primary);"></ion-icon>
-                            <ion-label>
-                                <h2 style="color: var(--ion-text-color);">{% trans "Venta" %} #{{ sale.id }}</h2>
-                                <p style="color: var(--ion-color-medium);">{{ sale.created_at|date:"d/m/Y H:i" }}</p>
-                            </ion-label>
-                            <ion-note slot="end" style="font-size: 1rem; font-weight: 600; color: var(--ion-color-success);">
-                                {{ sale.total|floatformat:2 }} €
-                            </ion-note>
-                        </ion-item>
-                        {% endfor %}
-                    </ion-list>
-                    {% else %}
-                    <div class="text-center py-8" style="color: var(--ion-color-medium);">
-                        <ion-icon name="cart-outline" style="font-size: 48px;"></ion-icon>
-                        <p class="mt-2">{% trans "Sin compras registradas" %}</p>
-                    </div>
+            <ion-list lines="none">
+                <ion-item>
+                    <ion-icon name="call-outline" slot="start" color="primary"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Phone" %}</p>
+                        <h3>{{ customer.phone|default:"—" }}</h3>
+                    </ion-label>
+                    {% if customer.phone %}
+                    <ion-button slot="end" fill="clear" href="tel:{{ customer.phone }}">
+                        <ion-icon slot="icon-only" name="call"></ion-icon>
+                    </ion-button>
                     {% endif %}
-                </ion-card-content>
-            </ion-card>
+                </ion-item>
+
+                <ion-item>
+                    <ion-icon name="mail-outline" slot="start" color="primary"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Email" %}</p>
+                        <h3>{{ customer.email|default:"—" }}</h3>
+                    </ion-label>
+                    {% if customer.email %}
+                    <ion-button slot="end" fill="clear" href="mailto:{{ customer.email }}">
+                        <ion-icon slot="icon-only" name="mail"></ion-icon>
+                    </ion-button>
+                    {% endif %}
+                </ion-item>
+
+                <ion-item>
+                    <ion-icon name="location-outline" slot="start" color="primary"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Address" %}</p>
+                        <h3 style="white-space: pre-wrap;">{{ customer.address|default:"—" }}</h3>
+                    </ion-label>
+                </ion-item>
+
+                <ion-item>
+                    <ion-icon name="document-text-outline" slot="start" color="primary"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Tax ID" %}</p>
+                        <h3>{{ customer.tax_id|default:"—" }}</h3>
+                    </ion-label>
+                </ion-item>
+            </ion-list>
+        {% endui_card %}
+
+        {# Notes Card #}
+        {% if customer.notes %}
+        {% ui_card %}
+            <div class="d-flex justify-between align-center mb-md">
+                <span class="fw-semibold fs-lg">{% trans "Notes" %}</span>
+            </div>
+            <p style="white-space: pre-wrap;">{{ customer.notes }}</p>
+        {% endui_card %}
+        {% endif %}
+
+        {# Dates Card #}
+        {% ui_card %}
+            <div class="d-flex justify-between align-center mb-md">
+                <span class="fw-semibold fs-lg">{% trans "Dates" %}</span>
+            </div>
+
+            <ion-list lines="none">
+                <ion-item>
+                    <ion-icon name="calendar-outline" slot="start" color="medium"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Customer since" %}</p>
+                        <h3>{{ customer.created_at|date:"d/m/Y" }}</h3>
+                    </ion-label>
+                </ion-item>
+                <ion-item>
+                    <ion-icon name="time-outline" slot="start" color="medium"></ion-icon>
+                    <ion-label>
+                        <p class="text-secondary fs-sm">{% trans "Last update" %}</p>
+                        <h3>{{ customer.updated_at|date:"d/m/Y H:i" }}</h3>
+                    </ion-label>
+                </ion-item>
+            </ion-list>
+        {% endui_card %}
+    </div>
+
+    {# Right Column: Stats & History #}
+    <div class="customer-detail-main">
+        {# Stats Cards #}
+        <div class="d-flex gap-sm mb-md flex-wrap">
+            {% ui_stat_card value=customer.total_spent|floatformat:2|add:" €" label=_("Total Spent") icon="cash-outline" color="success" %}
+            {% ui_stat_card value=customer.visit_count label=_("Visits") icon="repeat-outline" color="primary" %}
+            {% ui_stat_card value=customer.average_purchase|floatformat:2|add:" €" label=_("Avg. Purchase") icon="analytics-outline" %}
         </div>
+
+        {# Recent Purchases #}
+        {% ui_card %}
+            <div class="d-flex justify-between align-center mb-md">
+                <span class="fw-semibold fs-lg">{% trans "Recent Purchases" %}</span>
+            </div>
+
+            {% if recent_purchases %}
+            <ion-list>
+                {% for sale in recent_purchases %}
+                <ion-item>
+                    <ion-icon name="receipt-outline" slot="start" color="primary"></ion-icon>
+                    <ion-label>
+                        <h2>{% trans "Sale" %} #{{ sale.id }}</h2>
+                        <p class="text-secondary">{{ sale.created_at|date:"d/m/Y H:i" }}</p>
+                    </ion-label>
+                    <ion-note slot="end" class="fw-semibold text-success fs-lg">
+                        {{ sale.total|floatformat:2 }} €
+                    </ion-note>
+                </ion-item>
+                {% endfor %}
+            </ion-list>
+            {% else %}
+            <div class="ui-empty-state">
+                <div class="ui-empty-state__icon">
+                    <ion-icon name="cart-outline"></ion-icon>
+                </div>
+                <h3 class="ui-empty-state__title">{% trans "No purchases recorded" %}</h3>
+            </div>
+            {% endif %}
+        {% endui_card %}
     </div>
 </div>
+</div>
+
+<style>
+.customer-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: var(--space-md);
+}
+
+@media (max-width: 992px) {
+    .customer-detail-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.customer-detail-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.customer-detail-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+ion-list {
+    padding: 0;
+}
+</style>

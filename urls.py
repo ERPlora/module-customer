@@ -19,4 +19,8 @@ urlpatterns = [
 
     # Export
     path('export/', views.customers_export, name='export'),
+
+    # Settings
+    path('settings/', views.customers_settings, name='settings'),
+    path('settings/save/', views.customers_settings_save, name='settings_save'),
 ]

@@ -1,14 +1,21 @@
-{% extends "dashboard/layout.html" %}
+{% extends "ui/content_base.html" %}
 {% load i18n %}
 
 {% block page_title %}{% trans "Clientes" %}{% endblock %}
 
-{% block section_tabbar %}
-<ion-footer>
-{% include "customers/partials/tabbar_customer.html" with current_view='list' %}
-</ion-footer>
+{# Section context for sidebar highlighting #}
+{% block content %}
+{% with current_section="customers" section_title=_("Customers") %}
+{{ block.super }}
+{% endwith %}
 {% endblock %}
 
-{% block dashboard_content %}
+{% block module_tabbar %}
+
+{% include "customers/partials/tabbar.html" with current_view='list' %}
+
+{% endblock %}
+
+{% block page_content %}
 {% include "customers/partials/list_content.html" %}
 {% endblock %}

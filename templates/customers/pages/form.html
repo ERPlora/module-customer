@@ -1,4 +1,4 @@
-{% extends "dashboard/layout.html" %}
+{% extends "ui/content_base.html" %}
 {% load i18n %}
 
 {% block page_title %}
@@ -9,12 +9,16 @@
     {% endif %}
 {% endblock %}
 
-{% block section_tabbar %}
-<ion-footer>
-{% include "customers/partials/tabbar_customer.html" with current_view='create' %}
-</ion-footer>
+{# Section context for sidebar highlighting #}
+{% block content %}
+{% with current_section="customers" section_title=_("Customers") %}
+{{ block.super }}
+{% endwith %}
 {% endblock %}
 
-{% block dashboard_content %}
+{# No tabbar for form pages - they have back button instead #}
+{% block module_tabbar %}{% endblock %}
+
+{% block page_content %}
 {% include "customers/partials/form_content.html" %}
 {% endblock %}

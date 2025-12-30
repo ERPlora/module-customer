@@ -1,0 +1,170 @@
+{% load static i18n ui component_tags %}
+
+{% component "settings_page"
+    title=_("Customer Settings")
+    subtitle=_("Configure customers module behavior")
+    tabbar_template="customers/partials/tabbar_customer.html"
+    tabbar_view="settings"
+    alpine_app="settingsApp" %}
+
+    {% fill "settings" %}
+        {% component "setting_section" title=_("Required Fields") %}
+            {% component "setting_toggle"
+                name="require_phone"
+                title=_("Require Phone")
+                description=_("Phone number is mandatory when creating customers")
+                checked=config.require_phone
+                color="warning" %}{% endcomponent %}
+
+            {% component "setting_toggle"
+                name="require_email"
+                title=_("Require Email")
+                description=_("Email is mandatory when creating customers")
+                checked=config.require_email
+                color="warning" %}{% endcomponent %}
+
+            {% component "setting_toggle"
+                name="require_tax_id"
+                title=_("Require Tax ID")
+                description=_("Tax ID (ID/VAT number) is mandatory when creating customers")
+                checked=config.require_tax_id
+                color="warning" %}{% endcomponent %}
+        {% endcomponent %}
+
+        {% component "setting_section" title=_("Display Options") %}
+            {% component "setting_toggle"
+                name="show_inactive"
+                title=_("Show Inactive Customers")
+                description=_("Include inactive customers in the list by default")
+                checked=config.show_inactive %}{% endcomponent %}
+
+            {% component "setting_select"
+                name="default_sort"
+                title=_("Default Sort Order")
+                description=_("How to sort the customer list by default")
+                value=config.default_sort
+                options=sort_options %}{% endcomponent %}
+        {% endcomponent %}
+
+        {% component "setting_section" title=_("Export Options") %}
+            {% component "setting_toggle"
+                name="include_stats_in_export"
+                title=_("Include Stats in Export")
+                description=_("Include spending statistics when exporting customers to CSV")
+                checked=config.include_stats_in_export %}{% endcomponent %}
+        {% endcomponent %}
+    {% endfill %}
+
+    {% fill "actions" %}
+        <div class="mt-lg pt-md" style="border-top: 1px solid var(--border-color);">
+            <ion-button
+                color="medium"
+                fill="outline"
+                expand="block"
+                @click="resetToDefaults()">
+                <ion-icon slot="start" name="refresh-outline"></ion-icon>
+                {% trans "Reset to Defaults" %}
+            </ion-button>
+        </div>
+    {% endfill %}
+{% endcomponent %}
+
+<script>
+function settingsApp() {
+    return {
+        settings: {
+            require_phone: {{ config.require_phone|yesno:"true,false" }},
+            require_email: {{ config.require_email|yesno:"true,false" }},
+            require_tax_id: {{ config.require_tax_id|yesno:"true,false" }},
+            show_inactive: {{ config.show_inactive|yesno:"true,false" }},
+            default_sort: "{{ config.default_sort|escapejs }}",
+            include_stats_in_export: {{ config.include_stats_in_export|yesno:"true,false" }}
+        },
+
+        init() {
+            this.$nextTick(() => {
+                this.setupToggle('toggle_require_phone', 'require_phone');
+                this.setupToggle('toggle_require_email', 'require_email');
+                this.setupToggle('toggle_require_tax_id', 'require_tax_id');
+                this.setupToggle('toggle_show_inactive', 'show_inactive');
+                this.setupSelect('select_default_sort', 'default_sort');
+                this.setupToggle('toggle_include_stats_in_export', 'include_stats_in_export');
+            });
+        },
+
+        setupToggle(refName, settingKey) {
+            const toggle = this.$refs[refName];
+            if (toggle) {
+                toggle.addEventListener('ionChange', (e) => {
+                    this.updateSetting(settingKey, e.detail.checked);
+                });
+            }
+        },
+
+        setupSelect(refName, settingKey) {
+            const select = this.$refs[refName];
+            if (select) {
+                select.addEventListener('ionChange', (e) => {
+                    this.updateSetting(settingKey, e.detail.value);
+                });
+            }
+        },
+
+        async updateSetting(key, value) {
+            this.settings[key] = value;
+
+            try {
+                const response = await fetch('{% url "customers:settings_save" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': Alpine.store('ui').getCsrfToken()
+                    },
+                    body: JSON.stringify(this.settings)
+                });
+
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    Alpine.store('ui').success('{% trans "Settings saved" %}');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                Alpine.store('ui').error('{% trans "Error saving settings" %}');
+            }
+        },
+
+        async resetToDefaults() {
+            this.settings = {
+                require_phone: false,
+                require_email: false,
+                require_tax_id: false,
+                show_inactive: false,
+                default_sort: 'name',
+                include_stats_in_export: true
+            };
+
+            try {
+                const response = await fetch('{% url "customers:settings_save" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': Alpine.store('ui').getCsrfToken()
+                    },
+                    body: JSON.stringify(this.settings)
+                });
+
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    Alpine.store('ui').toast('{% trans "Settings reset to defaults" %}', 'warning');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                Alpine.store('ui').error('{% trans "Error resetting settings" %}');
+            }
+        }
+    }
+}
+</script>

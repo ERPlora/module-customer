@@ -1,194 +1,15 @@
-{% load i18n %}
+{% load i18n ui %}
 
 {% if request.htmx %}
-<!-- Tab bar update via OOB swap (only on HTMX navigation) -->
-<div id="dashboard-tabbar" hx-swap-oob="innerHTML">
-<ion-footer>
-{% include "customers/partials/tabbar_customer.html" with current_view='list' %}
-</ion-footer>
-</div>
+{% include "customers/partials/tabbar_customer.html" with current_view='list' oob=True %}
 {% endif %}
 
-<div class="p-4" x-data="customerList()">
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <ion-card>
-            <ion-card-content class="flex items-center gap-4">
-                <div class="p-3 rounded-full" style="background: var(--ion-color-primary-tint);">
-                    <ion-icon name="people" style="font-size: 24px; color: var(--ion-color-primary);"></ion-icon>
-                </div>
-                <div>
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Clientes Activos" %}</p>
-                    <p class="text-2xl font-bold" style="color: var(--ion-text-color);">{{ total_customers }}</p>
-                </div>
-            </ion-card-content>
-        </ion-card>
+{% ui_page_header title=_("Customers") action_icon="person-add-outline" action_label=_("New Customer") action_hx_get="/modules/customers/create/" action_hx_target="#main-content-area" action_hx_push_url="true" %}
 
-        <ion-card>
-            <ion-card-content class="flex items-center gap-4">
-                <div class="p-3 rounded-full" style="background: var(--ion-color-warning-tint);">
-                    <ion-icon name="person-remove" style="font-size: 24px; color: var(--ion-color-warning);"></ion-icon>
-                </div>
-                <div>
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Inactivos" %}</p>
-                    <p class="text-2xl font-bold" style="color: var(--ion-text-color);">{{ inactive_customers }}</p>
-                </div>
-            </ion-card-content>
-        </ion-card>
-
-        <ion-card>
-            <ion-card-content class="flex items-center gap-4">
-                <div class="p-3 rounded-full" style="background: var(--ion-color-success-tint);">
-                    <ion-icon name="trending-up" style="font-size: 24px; color: var(--ion-color-success);"></ion-icon>
-                </div>
-                <div>
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Total" %}</p>
-                    <p class="text-2xl font-bold" style="color: var(--ion-text-color);">{{ total_customers|add:inactive_customers }}</p>
-                </div>
-            </ion-card-content>
-        </ion-card>
-    </div>
-
-    <!-- Search and Filters -->
-    <ion-card class="mb-4">
-        <ion-card-content>
-            <div class="flex flex-wrap gap-4 items-center">
-                <ion-searchbar
-                    x-model="searchQuery"
-                    @ionInput="debouncedSearch()"
-                    placeholder="{% trans 'Buscar por nombre, teléfono, email...' %}"
-                    style="flex: 1; min-width: 200px;"
-                    debounce="300">
-                </ion-searchbar>
-
-                <ion-segment x-model="statusFilter" @ionChange="loadCustomers()" value="active" style="max-width: 300px;">
-                    <ion-segment-button value="active">
-                        <ion-label>{% trans "Activos" %}</ion-label>
-                    </ion-segment-button>
-                    <ion-segment-button value="inactive">
-                        <ion-label>{% trans "Inactivos" %}</ion-label>
-                    </ion-segment-button>
-                    <ion-segment-button value="all">
-                        <ion-label>{% trans "Todos" %}</ion-label>
-                    </ion-segment-button>
-                </ion-segment>
-            </div>
-        </ion-card-content>
-    </ion-card>
-
-    <!-- Customer List -->
-    <ion-card>
-        <ion-card-content class="p-0">
-            <!-- Loading -->
-            <template x-if="loading">
-                <div class="flex justify-center items-center py-12">
-                    <ion-spinner name="crescent"></ion-spinner>
-                </div>
-            </template>
-
-            <!-- Empty State -->
-            <template x-if="!loading && customers.length === 0">
-                <div class="text-center py-12" style="color: var(--ion-color-medium);">
-                    <ion-icon name="people-outline" style="font-size: 64px;"></ion-icon>
-                    <p class="mt-4">{% trans "No se encontraron clientes" %}</p>
-                    <ion-button
-                        class="mt-4"
-                        color="success"
-                        hx-get="{% url 'customers:create' %}"
-                        hx-target="#dashboard-content"
-                        hx-push-url="true">
-                        <ion-icon slot="start" name="person-add-outline"></ion-icon>
-                        {% trans "Crear Primer Cliente" %}
-                    </ion-button>
-                </div>
-            </template>
-
-            <!-- Table with Infinite Scroll -->
-            <template x-if="!loading && customers.length > 0">
-                <div class="scroll-ios scroll-list" style="max-height: calc(100vh - 400px);" @scroll="handleScroll($event)">
-                    <table class="w-full">
-                        <thead style="position: sticky; top: 0; z-index: 10;">
-                            <tr style="background: var(--ion-color-light); border-bottom: 1px solid var(--ion-border-color);">
-                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Nombre" %}</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Contacto" %}</th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Total Gastado" %}</th>
-                                <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Visitas" %}</th>
-                                <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Ultima Compra" %}</th>
-                                <th class="px-4 py-3 text-center text-xs font-semibold uppercase" style="color: var(--ion-color-medium);">{% trans "Acciones" %}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="customer in customers" :key="customer.id">
-                                <tr class="border-b hover:bg-opacity-50" style="border-color: var(--ion-border-color);">
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-full flex items-center justify-center"
-                                                 style="background: var(--ion-color-primary-tint);">
-                                                <ion-icon name="person" style="color: var(--ion-color-primary);"></ion-icon>
-                                            </div>
-                                            <div>
-                                                <p class="font-medium" style="color: var(--ion-text-color);" x-text="customer.name"></p>
-                                                <p class="text-xs" style="color: var(--ion-color-medium);" x-text="customer.tax_id || '-'"></p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <p class="text-sm" style="color: var(--ion-text-color);" x-text="customer.phone || '-'"></p>
-                                        <p class="text-xs" style="color: var(--ion-color-medium);" x-text="customer.email || '-'"></p>
-                                    </td>
-                                    <td class="px-4 py-3 text-right">
-                                        <span class="font-semibold" style="color: var(--ion-color-success);" x-text="formatCurrency(customer.total_spent)"></span>
-                                    </td>
-                                    <td class="px-4 py-3 text-center">
-                                        <span class="px-2 py-1 rounded-full text-xs"
-                                              style="background: var(--ion-color-primary-tint); color: var(--ion-color-primary);"
-                                              x-text="customer.visit_count"></span>
-                                    </td>
-                                    <td class="px-4 py-3 text-center text-sm" style="color: var(--ion-color-medium);" x-text="customer.last_purchase || '-'"></td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex gap-1 justify-center">
-                                            <ion-button size="small" fill="clear"
-                                                        :hx-get="'/modules/customers/' + customer.id + '/'"
-                                                        hx-target="#dashboard-content"
-                                                        hx-push-url="true"
-                                                        title="{% trans 'Ver' %}">
-                                                <ion-icon slot="icon-only" name="eye-outline"></ion-icon>
-                                            </ion-button>
-                                            <ion-button size="small" fill="clear"
-                                                        :hx-get="'/modules/customers/' + customer.id + '/edit/'"
-                                                        hx-target="#dashboard-content"
-                                                        hx-push-url="true"
-                                                        title="{% trans 'Editar' %}">
-                                                <ion-icon slot="icon-only" name="create-outline"></ion-icon>
-                                            </ion-button>
-                                            <ion-button size="small" fill="clear" color="danger"
-                                                        @click="confirmDelete(customer)"
-                                                        title="{% trans 'Desactivar' %}">
-                                                <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
-                                            </ion-button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                    <!-- Infinite scroll loader -->
-                    <template x-if="loadingMore">
-                        <div class="infinite-scroll-loader">
-                            <ion-spinner name="crescent"></ion-spinner>
-                        </div>
-                    </template>
-                    <template x-if="!hasNext && !loadingMore && customers.length > 0">
-                        <div class="infinite-scroll-end" x-text="totalCount + ' {% trans "clientes" %}'"></div>
-                    </template>
-                </div>
-            </template>
-        </ion-card-content>
-    </ion-card>
-</div>
-
+{# Register Alpine.js component BEFORE the HTML that uses it #}
 <script>
-function customerList() {
+// Must define the function immediately so Alpine can find it
+window.customerList = function() {
     return {
         customers: [],
         loading: true,
@@ -227,7 +48,6 @@ function customerList() {
                     this.customers = data.customers;
                     this.hasNext = data.has_next;
                     this.totalCount = data.total_count;
-                    // Re-process HTMX on dynamic content
                     this.$nextTick(() => htmx.process(this.$el));
                 }
             } catch (error) {
@@ -254,7 +74,6 @@ function customerList() {
                 if (data.success) {
                     this.customers = [...this.customers, ...data.customers];
                     this.hasNext = data.has_next;
-                    // Re-process HTMX on dynamic content
                     this.$nextTick(() => htmx.process(this.$el));
                 }
             } catch (error) {
@@ -282,15 +101,15 @@ function customerList() {
 
         async confirmDelete(customer) {
             const alert = document.createElement('ion-alert');
-            alert.header = '{% trans "Confirmar" %}';
-            alert.message = `{% trans "Desactivar cliente" %} "${customer.name}"?`;
+            alert.header = '{% trans "Confirm" %}';
+            alert.message = `{% trans "Deactivate customer" %} "${customer.name}"?`;
             alert.buttons = [
                 {
-                    text: '{% trans "Cancelar" %}',
+                    text: '{% trans "Cancel" %}',
                     role: 'cancel'
                 },
                 {
-                    text: '{% trans "Desactivar" %}',
+                    text: '{% trans "Deactivate" %}',
                     role: 'destructive',
                     handler: async () => {
                         try {
@@ -307,6 +126,7 @@ function customerList() {
                                 toast.message = data.message;
                                 toast.duration = 2000;
                                 toast.color = 'success';
+                                toast.position = 'top';
                                 document.body.appendChild(toast);
                                 toast.present();
                             }
@@ -318,7 +138,199 @@ function customerList() {
             ];
             document.body.appendChild(alert);
             await alert.present();
-        }
     };
-}
+};
+
+// Re-initialize Alpine for HTMX loaded content
+document.addEventListener('htmx:afterSettle', function(event) {
+    if (event.detail.target.id === 'main-content-area') {
+        const alpineEl = event.detail.target.querySelector('[x-data]');
+        if (alpineEl && !alpineEl._x_dataStack) {
+            Alpine.initTree(alpineEl);
+        }
+    }
+});
 </script>
+
+<div class="ion-padding" x-data="customerList()">
+    {# Stats Cards - 4 KPIs for consistency #}
+    <ion-row class="mb-md">
+        <ion-col size="6" size-md="3">
+            {% ui_stat_card value=total_customers label=_("Active") icon="people-outline" color="primary" %}
+        </ion-col>
+        <ion-col size="6" size-md="3">
+            {% ui_stat_card value=inactive_customers label=_("Inactive") icon="person-remove-outline" color="warning" %}
+        </ion-col>
+        <ion-col size="6" size-md="3">
+            {% with total=total_customers|add:inactive_customers %}
+            {% ui_stat_card value=total label=_("Total") icon="trending-up-outline" color="success" %}
+            {% endwith %}
+        </ion-col>
+        <ion-col size="6" size-md="3">
+            {% ui_stat_card value=new_this_month|default:0 label=_("New This Month") icon="calendar-outline" color="tertiary" %}
+        </ion-col>
+    </ion-row>
+
+    {# Search and Filters #}
+    {% ui_card css_class="mb-md" %}
+        <div class="d-flex flex-wrap gap-md align-center">
+            <ion-searchbar
+                x-model="searchQuery"
+                @ionInput="debouncedSearch()"
+                placeholder="{% trans 'Search by name, phone, email...' %}"
+                class="flex-1"
+                style="min-width: 200px;"
+                debounce="300">
+            </ion-searchbar>
+
+            <ion-segment x-model="statusFilter" @ionChange="loadCustomers()" value="active" style="max-width: 300px;">
+                <ion-segment-button value="active">
+                    <ion-label>{% trans "Active" %}</ion-label>
+                </ion-segment-button>
+                <ion-segment-button value="inactive">
+                    <ion-label>{% trans "Inactive" %}</ion-label>
+                </ion-segment-button>
+                <ion-segment-button value="all">
+                    <ion-label>{% trans "All" %}</ion-label>
+                </ion-segment-button>
+            </ion-segment>
+        </div>
+    {% endui_card %}
+
+    {# Customer List #}
+    {% ui_card %}
+        {# Loading #}
+        <template x-if="loading">
+            <div class="d-flex justify-center align-center" style="padding: var(--space-xxl);">
+                <ion-spinner name="crescent"></ion-spinner>
+            </div>
+        </template>
+
+        {# Empty State #}
+        <template x-if="!loading && customers.length === 0">
+            <div class="ui-empty-state">
+                <div class="ui-empty-state__icon">
+                    <ion-icon name="people-outline"></ion-icon>
+                </div>
+                <h3 class="ui-empty-state__title">{% trans "No customers found" %}</h3>
+                <p class="ui-empty-state__description">{% trans "Create your first customer to get started" %}</p>
+                <ion-button
+                    color="success"
+                    hx-get="{% url 'customers:create' %}"
+                    hx-target="#main-content-area"
+                    hx-push-url="true">
+                    <ion-icon slot="start" name="person-add-outline"></ion-icon>
+                    {% trans "Create First Customer" %}
+                </ion-button>
+            </div>
+        </template>
+
+        {# Table with Infinite Scroll #}
+        <template x-if="!loading && customers.length > 0">
+            <div class="data-table-container" @scroll="handleScroll($event)">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Name" %}</th>
+                            <th>{% trans "Contact" %}</th>
+                            <th class="cell-right">{% trans "Total Spent" %}</th>
+                            <th class="cell-center">{% trans "Visits" %}</th>
+                            <th class="cell-center hide-mobile">{% trans "Last Purchase" %}</th>
+                            <th class="cell-actions">{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="customer in customers" :key="customer.id">
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-center gap-sm">
+                                        <div class="customer-avatar">
+                                            <ion-icon name="person"></ion-icon>
+                                        </div>
+                                        <div>
+                                            <span class="fw-medium" x-text="customer.name"></span>
+                                            <span class="d-block text-secondary fs-xs" x-text="customer.tax_id || '-'"></span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="fs-sm" x-text="customer.phone || '-'"></span>
+                                    <span class="d-block text-secondary fs-xs" x-text="customer.email || '-'"></span>
+                                </td>
+                                <td class="cell-right">
+                                    <span class="fw-semibold text-success" x-text="formatCurrency(customer.total_spent)"></span>
+                                </td>
+                                <td class="cell-center">
+                                    <span class="customer-visit-badge" x-text="customer.visit_count"></span>
+                                </td>
+                                <td class="cell-center text-secondary fs-sm hide-mobile" x-text="customer.last_purchase || '-'"></td>
+                                <td>
+                                    <div class="table-actions">
+                                        <ion-button size="small" fill="clear"
+                                                    :hx-get="'/modules/customers/' + customer.id + '/'"
+                                                    hx-target="#main-content-area"
+                                                    hx-push-url="true"
+                                                    title="{% trans 'View' %}">
+                                            <ion-icon slot="icon-only" name="eye-outline"></ion-icon>
+                                        </ion-button>
+                                        <ion-button size="small" fill="clear"
+                                                    :hx-get="'/modules/customers/' + customer.id + '/edit/'"
+                                                    hx-target="#main-content-area"
+                                                    hx-push-url="true"
+                                                    title="{% trans 'Edit' %}">
+                                            <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+                                        </ion-button>
+                                        <ion-button size="small" fill="clear" color="danger"
+                                                    @click="confirmDelete(customer)"
+                                                    title="{% trans 'Deactivate' %}">
+                                            <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                                        </ion-button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                {# Infinite scroll loader #}
+                <template x-if="loadingMore">
+                    <div class="infinite-scroll-loader">
+                        <ion-spinner name="crescent"></ion-spinner>
+                    </div>
+                </template>
+                <template x-if="!hasNext && !loadingMore && customers.length > 0">
+                    <div class="infinite-scroll-end" x-text="totalCount + ' {% trans "customers" %}'"></div>
+                </template>
+            </div>
+        </template>
+    {% endui_card %}
+</div>
+
+<style>
+.customer-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.customer-avatar ion-icon {
+    font-size: 20px;
+    color: var(--color-primary);
+}
+
+.customer-visit-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xxs) var(--space-xs);
+    border-radius: var(--border-radius-round);
+    background: rgba(var(--color-primary-rgb), 0.1);
+    color: var(--color-primary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    min-width: 24px;
+}
+</style>

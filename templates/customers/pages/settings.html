@@ -1,9 +1,8 @@
 {% extends "ui/content_base.html" %}
 {% load i18n %}
 
-{% block page_title %}{% trans "Cliente" %}: {{ customer.name }}{% endblock %}
+{% block page_title %}{% trans "Customers Settings" %}{% endblock %}
 
-{# Section context for sidebar highlighting #}
 {% block content %}
 {% with current_section="customers" section_title=_("Customers") %}
 {{ block.super }}
@@ -12,10 +11,10 @@
 
 {% block module_tabbar %}
 
-{% include "customers/partials/tabbar.html" %}
+{% include "customers/partials/tabbar.html" with current_view='settings' %}
 
 {% endblock %}
 
 {% block page_content %}
-{% include "customers/partials/detail_content.html" %}
+{% include "customers/partials/settings_content.html" %}
 {% endblock %}

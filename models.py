@@ -4,6 +4,75 @@ from django.utils.translation import gettext_lazy as _
 from decimal import Decimal
 
 
+class CustomersConfig(models.Model):
+    """
+    Singleton configuration for the Customers module.
+    """
+    # Customer defaults
+    require_phone = models.BooleanField(
+        default=False,
+        verbose_name=_("Require Phone"),
+        help_text=_("Require phone number when creating customers")
+    )
+    require_email = models.BooleanField(
+        default=False,
+        verbose_name=_("Require Email"),
+        help_text=_("Require email when creating customers")
+    )
+    require_tax_id = models.BooleanField(
+        default=False,
+        verbose_name=_("Require Tax ID"),
+        help_text=_("Require tax ID when creating customers")
+    )
+
+    # Display settings
+    show_inactive = models.BooleanField(
+        default=False,
+        verbose_name=_("Show Inactive Customers"),
+        help_text=_("Show inactive customers in the list by default")
+    )
+    default_sort = models.CharField(
+        max_length=20,
+        default='name',
+        choices=[
+            ('name', _('Name')),
+            ('-created_at', _('Newest first')),
+            ('-total_spent', _('Highest spending')),
+            ('-visit_count', _('Most visits')),
+        ],
+        verbose_name=_("Default Sort")
+    )
+
+    # Export settings
+    include_stats_in_export = models.BooleanField(
+        default=True,
+        verbose_name=_("Include Stats in Export"),
+        help_text=_("Include spending statistics in CSV exports")
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'customers'
+        verbose_name = _("Customers Configuration")
+        verbose_name_plural = _("Customers Configuration")
+
+    def __str__(self):
+        return "Customers Module Configuration"
+
+    def save(self, *args, **kwargs):
+        # Singleton pattern: ensure only one instance
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_config(cls):
+        """Get or create the singleton configuration."""
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+
 class Customer(models.Model):
     """
     Customer model for managing client information and purchase history.
@@ -37,7 +106,7 @@ class Customer(models.Model):
     last_purchase_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Last Purchase"))
 
     class Meta:
-        app_label = 'customer'
+        app_label = 'customers'
         verbose_name = _("Customer")
         verbose_name_plural = _("Customers")
         ordering = ['-created_at']

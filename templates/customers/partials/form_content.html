@@ -1,35 +1,38 @@
-{% load i18n %}
+{% load i18n ui %}
 
 {% if request.htmx %}
-<!-- Tab bar update via OOB swap (only on HTMX navigation) -->
-<div id="dashboard-tabbar" hx-swap-oob="innerHTML">
-<ion-footer>
-{% include "customers/partials/tabbar_customer.html" with current_view='create' %}
-</ion-footer>
-</div>
+{# Clear tab bar for form pages - they use back button navigation #}
+<div id="dashboard-tabbar" hx-swap-oob="innerHTML"></div>
 {% endif %}
 
-<!-- Define Alpine.js component BEFORE the element that uses it -->
+{# Register Alpine.js component using Alpine.data() for proper HTMX compatibility #}
 <script>
-function customerForm() {
-    return {
-        form: {
-            name: '{{ customer.name|default:""|escapejs }}',
-            tax_id: '{{ customer.tax_id|default:""|escapejs }}',
-            phone: '{{ customer.phone|default:""|escapejs }}',
-            email: '{{ customer.email|default:""|escapejs }}',
-            address: '{{ customer.address|default:""|escapejs }}',
-            notes: '{{ customer.notes|default:""|escapejs }}',
-            is_active: {{ customer.is_active|yesno:"true,false"|default:"true" }}
-        },
+(function() {
+    // Form data from Django context - must be extracted before the IIFE runs
+    const initialFormData = {
+        name: '{{ customer.name|default:""|escapejs }}',
+        tax_id: '{{ customer.tax_id|default:""|escapejs }}',
+        phone: '{{ customer.phone|default:""|escapejs }}',
+        email: '{{ customer.email|default:""|escapejs }}',
+        address: '{{ customer.address|default:""|escapejs }}',
+        notes: '{{ customer.notes|default:""|escapejs }}',
+        is_active: {{ customer.is_active|yesno:"true,false"|default:"true" }}
+    };
+    const submitUrl = {% if customer %}'{% url "customers:edit" customer_id=customer.id %}'{% else %}'{% url "customers:create" %}'{% endif %};
+    const listUrl = '{% url "customers:list" %}';
+    const csrfToken = '{{ csrf_token }}';
+
+    const customerFormData = () => ({
+        form: { ...initialFormData },
         saving: false,
 
         async submitForm() {
             if (!this.form.name.trim()) {
                 const toast = document.createElement('ion-toast');
-                toast.message = '{% trans "El nombre es obligatorio" %}';
+                toast.message = '{% trans "Name is required" %}';
                 toast.duration = 3000;
                 toast.color = 'danger';
+                toast.position = 'top';
                 document.body.appendChild(toast);
                 await toast.present();
                 return;
@@ -49,12 +52,10 @@ function customerForm() {
                     formData.append('is_active', 'on');
                 }
 
-                const url = {% if customer %}'{% url "customers:edit" customer_id=customer.id %}'{% else %}'{% url "customers:create" %}'{% endif %};
-
-                const response = await fetch(url, {
+                const response = await fetch(submitUrl, {
                     method: 'POST',
                     headers: {
-                        'X-CSRFToken': '{{ csrf_token }}'
+                        'X-CSRFToken': csrfToken
                     },
                     body: formData
                 });
@@ -66,196 +67,279 @@ function customerForm() {
                     toast.message = data.message;
                     toast.duration = 2000;
                     toast.color = 'success';
+                    toast.position = 'top';
                     document.body.appendChild(toast);
                     await toast.present();
 
-                    // Navigate to list
-                    htmx.ajax('GET', '{% url "customers:list" %}', {
-                        target: '#dashboard-content',
+                    htmx.ajax('GET', listUrl, {
+                        target: '#main-content-area',
                         swap: 'innerHTML'
                     });
-                    history.pushState({}, '', '{% url "customers:list" %}');
+                    history.pushState({}, '', listUrl);
                 } else {
-                    throw new Error(data.error || '{% trans "Error al guardar" %}');
+                    throw new Error(data.error || '{% trans "Error saving" %}');
                 }
             } catch (error) {
                 const toast = document.createElement('ion-toast');
                 toast.message = error.message;
                 toast.duration = 3000;
                 toast.color = 'danger';
+                toast.position = 'top';
                 document.body.appendChild(toast);
                 await toast.present();
             } finally {
                 this.saving = false;
             }
         }
-    };
-}
+    });
+
+    // Register with Alpine.data() if Alpine is ready, otherwise queue it
+    if (typeof Alpine !== 'undefined' && Alpine.data) {
+        Alpine.data('customerForm', customerFormData);
+    } else {
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('customerForm', customerFormData);
+        }, { once: true });
+    }
+
+    // Also make it available as a global function for backwards compatibility
+    window.customerForm = customerFormData;
+})();
 </script>
 
-<div class="p-4" x-data="customerForm()">
-    <ion-card>
-        <ion-card-header>
-            <ion-card-title>
-                {% if customer %}
-                    {% trans "Editar Cliente" %}: {{ customer.name }}
-                {% else %}
-                    {% trans "Nuevo Cliente" %}
-                {% endif %}
-            </ion-card-title>
-        </ion-card-header>
+<div x-data="customerForm()">
+    {# Page Header #}
+    {% url 'customers:list' as back_url %}
+    {% if customer %}
+    {% ui_page_header title=_("Edit Customer") subtitle=customer.name back_url=back_url back_hx_target="#main-content-area" %}
+    {% else %}
+    {% ui_page_header title=_("New Customer") back_url=back_url back_hx_target="#main-content-area" %}
+    {% endif %}
 
-        <ion-card-content>
-            <form @submit.prevent="submitForm()">
-                {% csrf_token %}
+    {% ui_card %}
+        <form @submit.prevent="submitForm()">
+            {% csrf_token %}
 
-                <!-- Basic Information -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div>
-                        <ion-item>
-                            <ion-label position="stacked">{% trans "Nombre" %} *</ion-label>
-                            <ion-input
-                                type="text"
-                                name="name"
-                                x-model="form.name"
-                                required
-                                placeholder="{% trans 'Nombre del cliente' %}">
-                            </ion-input>
-                        </ion-item>
-                    </div>
+            {# Basic Information #}
+            <div class="form-grid form-grid--2col mb-lg">
+                <ion-item>
+                    <ion-input
+                        label="{% trans 'Name' %} *"
+                        label-placement="stacked"
+                        type="text"
+                        name="name"
+                        x-model="form.name"
+                        required
+                        placeholder="{% trans 'Customer name' %}">
+                    </ion-input>
+                </ion-item>
 
-                    <div>
-                        <ion-item>
-                            <ion-label position="stacked">{% trans "NIF/CIF" %}</ion-label>
-                            <ion-input
-                                type="text"
-                                name="tax_id"
-                                x-model="form.tax_id"
-                                placeholder="{% trans 'DNI/NIF/CIF' %}">
-                            </ion-input>
-                        </ion-item>
-                    </div>
-                </div>
+                <ion-item>
+                    <ion-input
+                        label="{% trans 'Tax ID' %}"
+                        label-placement="stacked"
+                        type="text"
+                        name="tax_id"
+                        x-model="form.tax_id"
+                        placeholder="{% trans 'ID/VAT number' %}">
+                    </ion-input>
+                </ion-item>
+            </div>
 
-                <!-- Contact Information -->
-                <h3 class="text-lg font-semibold mb-4" style="color: var(--ion-text-color);">
-                    <ion-icon name="call-outline" class="mr-2"></ion-icon>
-                    {% trans "Contacto" %}
-                </h3>
+            {# Contact Information #}
+            <h3 class="form-section-title">
+                <ion-icon name="call-outline"></ion-icon>
+                {% trans "Contact" %}
+            </h3>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div>
-                        <ion-item>
-                            <ion-label position="stacked">{% trans "Teléfono" %}</ion-label>
-                            <ion-input
-                                type="tel"
-                                name="phone"
-                                x-model="form.phone"
-                                placeholder="{% trans '+34 600 000 000' %}">
-                            </ion-input>
-                        </ion-item>
-                    </div>
+            <div class="form-grid form-grid--2col mb-lg">
+                <ion-item>
+                    <ion-input
+                        label="{% trans 'Phone' %}"
+                        label-placement="stacked"
+                        type="tel"
+                        name="phone"
+                        x-model="form.phone"
+                        placeholder="+34 600 000 000">
+                    </ion-input>
+                </ion-item>
 
-                    <div>
-                        <ion-item>
-                            <ion-label position="stacked">{% trans "Email" %}</ion-label>
-                            <ion-input
-                                type="email"
-                                name="email"
-                                x-model="form.email"
-                                placeholder="{% trans 'cliente@ejemplo.com' %}">
-                            </ion-input>
-                        </ion-item>
-                    </div>
-                </div>
+                <ion-item>
+                    <ion-input
+                        label="{% trans 'Email' %}"
+                        label-placement="stacked"
+                        type="email"
+                        name="email"
+                        x-model="form.email"
+                        placeholder="customer@example.com">
+                    </ion-input>
+                </ion-item>
+            </div>
 
-                <div class="mb-6">
-                    <ion-item>
-                        <ion-label position="stacked">{% trans "Dirección" %}</ion-label>
-                        <ion-textarea
-                            name="address"
-                            x-model="form.address"
-                            rows="2"
-                            placeholder="{% trans 'Calle, número, ciudad, código postal' %}">
-                        </ion-textarea>
-                    </ion-item>
-                </div>
+            <div class="mb-lg">
+                <ion-item>
+                    <ion-textarea
+                        label="{% trans 'Address' %}"
+                        label-placement="stacked"
+                        name="address"
+                        x-model="form.address"
+                        rows="2"
+                        placeholder="{% trans 'Street, city, postal code' %}">
+                    </ion-textarea>
+                </ion-item>
+            </div>
 
-                <!-- Notes -->
-                <div class="mb-6">
-                    <ion-item>
-                        <ion-label position="stacked">{% trans "Notas" %}</ion-label>
-                        <ion-textarea
-                            name="notes"
-                            x-model="form.notes"
-                            rows="3"
-                            placeholder="{% trans 'Observaciones adicionales...' %}">
-                        </ion-textarea>
-                    </ion-item>
-                </div>
+            {# Notes #}
+            <div class="mb-lg">
+                <ion-item>
+                    <ion-textarea
+                        label="{% trans 'Notes' %}"
+                        label-placement="stacked"
+                        name="notes"
+                        x-model="form.notes"
+                        rows="3"
+                        placeholder="{% trans 'Additional observations...' %}">
+                    </ion-textarea>
+                </ion-item>
+            </div>
 
-                {% if customer %}
-                <!-- Status (only for edit) -->
-                <div class="mb-6">
-                    <ion-item>
-                        <ion-label>{% trans "Cliente Activo" %}</ion-label>
-                        <ion-toggle name="is_active" x-model="form.is_active" :checked="form.is_active"></ion-toggle>
-                    </ion-item>
-                </div>
-                {% endif %}
+            {% if customer %}
+            {# Status (only for edit) #}
+            <div class="mb-lg">
+                <ion-item>
+                    <ion-toggle name="is_active" x-model="form.is_active" :checked="form.is_active" justify="start" label-placement="end">
+                        {% trans "Active Customer" %}
+                    </ion-toggle>
+                </ion-item>
+            </div>
+            {% endif %}
 
-                <!-- Actions -->
-                <div class="flex gap-3 justify-end pt-4" style="border-top: 1px solid var(--ion-border-color);">
+            {# Actions #}
+            <div class="form-actions">
+                <div></div>
+                <div class="d-flex gap-sm">
                     <ion-button fill="outline" type="button"
                                 hx-get="{% url 'customers:list' %}"
-                                hx-target="#dashboard-content"
+                                hx-target="#main-content-area"
                                 hx-push-url="true">
                         <ion-icon slot="start" name="close-outline"></ion-icon>
-                        {% trans "Cancelar" %}
+                        {% trans "Cancel" %}
                     </ion-button>
 
                     <ion-button type="submit" :disabled="saving" color="success">
                         <ion-spinner x-show="saving" name="crescent" style="width: 20px; height: 20px;"></ion-spinner>
                         <ion-icon x-show="!saving" slot="start" name="checkmark-outline"></ion-icon>
-                        <span x-text="saving ? '{% trans "Guardando..." %}' : '{% trans "Guardar" %}'"></span>
+                        <span x-text="saving ? '{% trans "Saving..." %}' : '{% trans "Save" %}'"></span>
                     </ion-button>
                 </div>
-            </form>
-        </ion-card-content>
-    </ion-card>
+            </div>
+        </form>
+    {% endui_card %}
 
     {% if customer %}
-    <!-- Customer Stats (only for edit) -->
-    <ion-card class="mt-4">
-        <ion-card-header>
-            <ion-card-title>{% trans "Estadísticas" %}</ion-card-title>
-        </ion-card-header>
-        <ion-card-content>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="text-center p-4 rounded-lg" style="background: var(--ion-color-light);">
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Total Gastado" %}</p>
-                    <p class="text-xl font-bold" style="color: var(--ion-color-success);">{{ customer.total_spent|floatformat:2 }} €</p>
-                </div>
-                <div class="text-center p-4 rounded-lg" style="background: var(--ion-color-light);">
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Visitas" %}</p>
-                    <p class="text-xl font-bold" style="color: var(--ion-color-primary);">{{ customer.visit_count }}</p>
-                </div>
-                <div class="text-center p-4 rounded-lg" style="background: var(--ion-color-light);">
-                    <p class="text-sm" style="color: var(--ion-color-medium);">{% trans "Media por Compra" %}</p>
-                    <p class="text-xl font-bold" style="color: var(--ion-text-color);">{{ customer.average_purchase|floatformat:2 }} €</p>
-                </div>
-            </div>
+    {# Customer Stats (only for edit) #}
+    {% ui_card css_class="mt-md" %}
+        <div class="d-flex justify-between align-center mb-md">
+            <span class="fw-semibold fs-lg">{% trans "Statistics" %}</span>
+            <ion-button fill="outline" size="small"
+                        hx-post="{% url 'customers:update_stats' customer_id=customer.id %}"
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-swap="none">
+                <ion-icon slot="start" name="refresh-outline"></ion-icon>
+                {% trans "Update" %}
+            </ion-button>
+        </div>
 
-            <div class="mt-4 text-center">
-                <ion-button fill="outline" size="small"
-                            hx-post="{% url 'customers:update_stats' customer_id=customer.id %}"
-                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                            hx-swap="none">
-                    <ion-icon slot="start" name="refresh-outline"></ion-icon>
-                    {% trans "Actualizar Estadísticas" %}
-                </ion-button>
+        <div class="d-flex gap-sm flex-wrap">
+            <div class="stat-box stat-box--success">
+                <span class="stat-box__label">{% trans "Total Spent" %}</span>
+                <span class="stat-box__value">{{ customer.total_spent|floatformat:2 }} €</span>
             </div>
-        </ion-card-content>
-    </ion-card>
+            <div class="stat-box stat-box--primary">
+                <span class="stat-box__label">{% trans "Visits" %}</span>
+                <span class="stat-box__value">{{ customer.visit_count }}</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-box__label">{% trans "Avg. Purchase" %}</span>
+                <span class="stat-box__value">{{ customer.average_purchase|floatformat:2 }} €</span>
+            </div>
+        </div>
+    {% endui_card %}
     {% endif %}
 </div>
+
+<style>
+.form-grid {
+    display: grid;
+    gap: 0;
+}
+
+.form-grid--2col {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 768px) {
+    .form-grid--2col {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+    margin-bottom: var(--space-md);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-top: var(--space-md);
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--border-color);
+}
+
+.stat-box {
+    flex: 1;
+    min-width: 120px;
+    padding: var(--space-md);
+    border-radius: var(--border-radius);
+    background: var(--bg-color-secondary);
+    text-align: center;
+}
+
+.stat-box--success {
+    background: rgba(var(--color-success-rgb), 0.1);
+}
+
+.stat-box--success .stat-box__value {
+    color: var(--color-success);
+}
+
+.stat-box--primary {
+    background: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.stat-box--primary .stat-box__value {
+    color: var(--color-primary);
+}
+
+.stat-box__label {
+    display: block;
+    font-size: var(--font-size-sm);
+    color: var(--text-color-secondary);
+    margin-bottom: var(--space-xxs);
+}
+
+.stat-box__value {
+    display: block;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-color);
+}
+</style>

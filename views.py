@@ -1,11 +1,15 @@
+import json
+
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.db.models import Q
 from django.utils.translation import gettext as _
+from django.utils import timezone
+from datetime import timedelta
 
 from apps.core.htmx import htmx_view
-from .models import Customer
+from .models import Customer, CustomersConfig
 
 
 @require_http_methods(["GET"])
@@ -19,9 +23,14 @@ def customer_list(request):
     total_customers = Customer.objects.filter(is_active=True).count()
     inactive_customers = Customer.objects.filter(is_active=False).count()
 
+    # New customers this month
+    first_day_of_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    new_this_month = Customer.objects.filter(created_at__gte=first_day_of_month).count()
+
     return {
         'total_customers': total_customers,
         'inactive_customers': inactive_customers,
+        'new_this_month': new_this_month,
         'page_title': _('Clientes'),
     }
 
@@ -259,3 +268,46 @@ def customers_export(request):
         ])
 
     return response
+
+
+@require_http_methods(["GET"])
+@htmx_view('customers/pages/settings.html', 'customers/partials/settings_content.html')
+def customers_settings(request):
+    """Settings view for the Customers module."""
+    config = CustomersConfig.get_config()
+
+    # Sort options for the select component
+    sort_options = [
+        {'value': 'name', 'label': _('Name (A-Z)')},
+        {'value': '-created_at', 'label': _('Newest first')},
+        {'value': '-total_spent', 'label': _('Highest spending')},
+        {'value': '-visit_count', 'label': _('Most visits')},
+    ]
+
+    return {
+        'config': config,
+        'sort_options': sort_options,
+        'page_title': _('Settings'),
+    }
+
+
+@require_POST
+def customers_settings_save(request):
+    """Save customers settings via JSON."""
+    try:
+        data = json.loads(request.body)
+        config = CustomersConfig.get_config()
+
+        config.require_phone = data.get('require_phone', False)
+        config.require_email = data.get('require_email', False)
+        config.require_tax_id = data.get('require_tax_id', False)
+        config.show_inactive = data.get('show_inactive', False)
+        config.default_sort = data.get('default_sort', 'name')
+        config.include_stats_in_export = data.get('include_stats_in_export', True)
+        config.save()
+
+        return JsonResponse({'success': True, 'message': 'Settings saved'})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
