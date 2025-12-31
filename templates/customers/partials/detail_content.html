@@ -1,10 +1,7 @@
-{% load i18n ui %}
+{% load i18n ui component_tags %}
 
 {% if request.htmx %}
-{# Tab bar update via OOB swap (only on HTMX navigation) #}
-<ion-footer id="dashboard-tabbar" hx-swap-oob="outerHTML">
-{% include "customers/partials/tabbar_customer.html" with current_view='list' %}
-</ion-footer>
+{% component "tabbar" module_id="customers" current_view="list" oob=True %}{% endcomponent %}
 {% endif %}
 
 {% ui_page_header title=customer.name action_icon="create-outline" action_label=_("Edit") action_hx_get="/modules/customers/"|add:customer.id|add:"/edit/" action_hx_target="#main-content-area" action_hx_push_url="true" %}

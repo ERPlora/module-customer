@@ -1,7 +1,7 @@
-{% load i18n ui %}
+{% load i18n ui component_tags %}
 
 {% if request.htmx %}
-{% include "customers/partials/tabbar_customer.html" with current_view='list' oob=True %}
+{% component "tabbar" module_id="customers" current_view="list" oob=True %}{% endcomponent %}
 {% endif %}
 
 {% ui_page_header title=_("Customers") action_icon="person-add-outline" action_label=_("New Customer") action_hx_get="/modules/customers/create/" action_hx_target="#main-content-area" action_hx_push_url="true" %}

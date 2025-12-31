@@ -44,6 +44,33 @@
     "order": 10,
     "url": "/modules/customers/"
   },
+  "tabs": [
+    {
+      "id": "list",
+      "url": "customers:list",
+      "icon": "people-outline",
+      "label": "Customers"
+    },
+    {
+      "id": "create",
+      "url": "customers:create",
+      "icon": "person-add-outline",
+      "label": "New"
+    },
+    {
+      "id": "export",
+      "url": "customers:export",
+      "icon": "download-outline",
+      "label": "Export",
+      "is_link": true
+    },
+    {
+      "id": "settings",
+      "url": "customers:settings",
+      "icon": "settings-outline",
+      "label": "Settings"
+    }
+  ],
   "permissions": [
     "customers.view_customer",
     "customers.add_customer",

@@ -1,8 +1,8 @@
-{% load i18n ui %}
+{% load i18n ui component_tags %}
 
 {% if request.htmx %}
 {# Clear tab bar for form pages - they use back button navigation #}
-<div id="dashboard-tabbar" hx-swap-oob="innerHTML"></div>
+{% component "tabbar" module_id="customers" current_view="create" oob=True hide=True %}{% endcomponent %}
 {% endif %}
 
 {# Register Alpine.js component using Alpine.data() for proper HTMX compatibility #}
