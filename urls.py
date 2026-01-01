@@ -7,6 +7,7 @@ urlpatterns = [
     # List and create
     path('', views.customer_list, name='list'),
     path('api/list/', views.customer_list_ajax, name='list_ajax'),
+    path('htmx/list/', views.customer_list_htmx, name='list_htmx'),
     path('create/', views.customer_create, name='create'),
 
     # Detail, update, delete
@@ -23,4 +24,7 @@ urlpatterns = [
     # Settings
     path('settings/', views.customers_settings, name='settings'),
     path('settings/save/', views.customers_settings_save, name='settings_save'),
+    path('settings/toggle/', views.customers_settings_toggle, name='settings_toggle'),
+    path('settings/select/', views.customers_settings_select, name='settings_select'),
+    path('settings/reset/', views.customers_settings_reset, name='settings_reset'),
 ]

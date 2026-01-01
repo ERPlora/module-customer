@@ -1,123 +1,43 @@
 {% load i18n ui component_tags %}
 
-{% if request.htmx %}
-{# Clear tab bar for form pages - they use back button navigation #}
-{% component "tabbar" module_id="customers" current_view="create" oob=True hide=True %}{% endcomponent %}
-{% endif %}
-
-{# Register Alpine.js component using Alpine.data() for proper HTMX compatibility #}
+{# Toast listener for HX-Trigger events #}
 <script>
 (function() {
-    // Form data from Django context - must be extracted before the IIFE runs
-    const initialFormData = {
-        name: '{{ customer.name|default:""|escapejs }}',
-        tax_id: '{{ customer.tax_id|default:""|escapejs }}',
-        phone: '{{ customer.phone|default:""|escapejs }}',
-        email: '{{ customer.email|default:""|escapejs }}',
-        address: '{{ customer.address|default:""|escapejs }}',
-        notes: '{{ customer.notes|default:""|escapejs }}',
-        is_active: {{ customer.is_active|yesno:"true,false"|default:"true" }}
-    };
-    const submitUrl = {% if customer %}'{% url "customers:edit" customer_id=customer.id %}'{% else %}'{% url "customers:create" %}'{% endif %};
-    const listUrl = '{% url "customers:list" %}';
-    const csrfToken = '{{ csrf_token }}';
+    if (!window._customersToastListenerAdded) {
+        window._customersToastListenerAdded = true;
+        document.body.addEventListener('showToast', function(e) {
+            var detail = e.detail || {};
+            var message = detail.message || 'Done';
+            var color = detail.color || 'success';
 
-    const customerFormData = () => ({
-        form: { ...initialFormData },
-        saving: false,
-
-        async submitForm() {
-            if (!this.form.name.trim()) {
-                const toast = document.createElement('ion-toast');
-                toast.message = '{% trans "Name is required" %}';
-                toast.duration = 3000;
-                toast.color = 'danger';
-                toast.position = 'top';
-                document.body.appendChild(toast);
-                await toast.present();
-                return;
-            }
-
-            this.saving = true;
-
-            try {
-                const formData = new FormData();
-                formData.append('name', this.form.name);
-                formData.append('tax_id', this.form.tax_id);
-                formData.append('phone', this.form.phone);
-                formData.append('email', this.form.email);
-                formData.append('address', this.form.address);
-                formData.append('notes', this.form.notes);
-                if (this.form.is_active) {
-                    formData.append('is_active', 'on');
-                }
-
-                const response = await fetch(submitUrl, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    const toast = document.createElement('ion-toast');
-                    toast.message = data.message;
-                    toast.duration = 2000;
-                    toast.color = 'success';
-                    toast.position = 'top';
-                    document.body.appendChild(toast);
-                    await toast.present();
-
-                    htmx.ajax('GET', listUrl, {
-                        target: '#main-content-area',
-                        swap: 'innerHTML'
-                    });
-                    history.pushState({}, '', listUrl);
-                } else {
-                    throw new Error(data.error || '{% trans "Error saving" %}');
-                }
-            } catch (error) {
-                const toast = document.createElement('ion-toast');
-                toast.message = error.message;
-                toast.duration = 3000;
-                toast.color = 'danger';
-                toast.position = 'top';
-                document.body.appendChild(toast);
-                await toast.present();
-            } finally {
-                this.saving = false;
-            }
-        }
-    });
-
-    // Register with Alpine.data() if Alpine is ready, otherwise queue it
-    if (typeof Alpine !== 'undefined' && Alpine.data) {
-        Alpine.data('customerForm', customerFormData);
-    } else {
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('customerForm', customerFormData);
-        }, { once: true });
+            var toast = document.createElement('ion-toast');
+            toast.message = message;
+            toast.duration = 2000;
+            toast.position = 'top';
+            toast.color = color;
+            document.body.appendChild(toast);
+            toast.present();
+        });
     }
-
-    // Also make it available as a global function for backwards compatibility
-    window.customerForm = customerFormData;
 })();
 </script>
 
-<div x-data="customerForm()">
-    {# Page Header #}
-    {% url 'customers:list' as back_url %}
-    {% if customer %}
-    {% ui_page_header title=_("Edit Customer") subtitle=customer.name back_url=back_url back_hx_target="#main-content-area" %}
-    {% else %}
-    {% ui_page_header title=_("New Customer") back_url=back_url back_hx_target="#main-content-area" %}
-    {% endif %}
+{% url 'customers:list' as back_url %}
+{% component "page"
+    title=customer|yesno:_("Edit Customer"),_("New Customer")
+    subtitle=customer.name|default:""
+    module_id="customers"
+    hide_tabbar=True
+    back_url=back_url
+    back_hx_target="#main-content-area" %}
 
+    {% fill "content" %}
     {% ui_card %}
-        <form @submit.prevent="submitForm()">
+        <form id="customer-form"
+              method="POST"
+              hx-post="{% if customer %}{% url 'customers:edit' customer_id=customer.id %}{% else %}{% url 'customers:create' %}{% endif %}"
+              hx-target="#main-content-area"
+              hx-push-url="{% url 'customers:list' %}">
             {% csrf_token %}
 
             {# Basic Information #}
@@ -128,7 +48,7 @@
                         label-placement="stacked"
                         type="text"
                         name="name"
-                        x-model="form.name"
+                        value="{{ customer.name|default:'' }}"
                         required
                         placeholder="{% trans 'Customer name' %}">
                     </ion-input>
@@ -140,7 +60,7 @@
                         label-placement="stacked"
                         type="text"
                         name="tax_id"
-                        x-model="form.tax_id"
+                        value="{{ customer.tax_id|default:'' }}"
                         placeholder="{% trans 'ID/VAT number' %}">
                     </ion-input>
                 </ion-item>
@@ -159,7 +79,7 @@
                         label-placement="stacked"
                         type="tel"
                         name="phone"
-                        x-model="form.phone"
+                        value="{{ customer.phone|default:'' }}"
                         placeholder="+34 600 000 000">
                     </ion-input>
                 </ion-item>
@@ -170,7 +90,7 @@
                         label-placement="stacked"
                         type="email"
                         name="email"
-                        x-model="form.email"
+                        value="{{ customer.email|default:'' }}"
                         placeholder="customer@example.com">
                     </ion-input>
                 </ion-item>
@@ -182,10 +102,8 @@
                         label="{% trans 'Address' %}"
                         label-placement="stacked"
                         name="address"
-                        x-model="form.address"
                         rows="2"
-                        placeholder="{% trans 'Street, city, postal code' %}">
-                    </ion-textarea>
+                        placeholder="{% trans 'Street, city, postal code' %}">{{ customer.address|default:'' }}</ion-textarea>
                 </ion-item>
             </div>
 
@@ -196,10 +114,8 @@
                         label="{% trans 'Notes' %}"
                         label-placement="stacked"
                         name="notes"
-                        x-model="form.notes"
                         rows="3"
-                        placeholder="{% trans 'Additional observations...' %}">
-                    </ion-textarea>
+                        placeholder="{% trans 'Additional observations...' %}">{{ customer.notes|default:'' }}</ion-textarea>
                 </ion-item>
             </div>
 
@@ -207,7 +123,7 @@
             {# Status (only for edit) #}
             <div class="mb-lg">
                 <ion-item>
-                    <ion-toggle name="is_active" x-model="form.is_active" :checked="form.is_active" justify="start" label-placement="end">
+                    <ion-toggle name="is_active" {% if customer.is_active %}checked{% endif %} justify="start" label-placement="end">
                         {% trans "Active Customer" %}
                     </ion-toggle>
                 </ion-item>
@@ -226,10 +142,10 @@
                         {% trans "Cancel" %}
                     </ion-button>
 
-                    <ion-button type="submit" :disabled="saving" color="success">
-                        <ion-spinner x-show="saving" name="crescent" style="width: 20px; height: 20px;"></ion-spinner>
-                        <ion-icon x-show="!saving" slot="start" name="checkmark-outline"></ion-icon>
-                        <span x-text="saving ? '{% trans "Saving..." %}' : '{% trans "Save" %}'"></span>
+                    <ion-button type="submit" id="save-btn" color="success">
+                        <ion-icon id="save-icon" slot="start" name="checkmark-outline"></ion-icon>
+                        <ion-spinner id="save-spinner" name="crescent" slot="start" style="width: 20px; height: 20px; display: none;"></ion-spinner>
+                        <span id="save-text">{% trans "Save" %}</span>
                     </ion-button>
                 </div>
             </div>
@@ -266,7 +182,36 @@
         </div>
     {% endui_card %}
     {% endif %}
-</div>
+    {% endfill %}
+{% endcomponent %}
+
+<script>
+(function() {
+    var form = document.getElementById('customer-form');
+    var saveBtn = document.getElementById('save-btn');
+    var saveIcon = document.getElementById('save-icon');
+    var saveSpinner = document.getElementById('save-spinner');
+    var saveText = document.getElementById('save-text');
+
+    if (form) {
+        // Show loading state on submit
+        form.addEventListener('htmx:beforeRequest', function() {
+            if (saveBtn) saveBtn.disabled = true;
+            if (saveIcon) saveIcon.style.display = 'none';
+            if (saveSpinner) saveSpinner.style.display = '';
+            if (saveText) saveText.textContent = '{% trans "Saving..." %}';
+        });
+
+        // Reset loading state after request
+        form.addEventListener('htmx:afterRequest', function() {
+            if (saveBtn) saveBtn.disabled = false;
+            if (saveIcon) saveIcon.style.display = '';
+            if (saveSpinner) saveSpinner.style.display = 'none';
+            if (saveText) saveText.textContent = '{% trans "Save" %}';
+        });
+    }
+})();
+</script>
 
 <style>
 .form-grid {

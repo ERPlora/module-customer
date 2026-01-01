@@ -1,0 +1,123 @@
+{% load i18n %}
+{# Toast listener for HX-Trigger events #}
+<script>
+(function() {
+    if (!window._customerToastListenerAdded) {
+        window._customerToastListenerAdded = true;
+        document.body.addEventListener('showToast', function(e) {
+            const detail = e.detail || {};
+            const message = detail.message || 'Done';
+            const color = detail.color || 'success';
+
+            const toast = document.createElement('ion-toast');
+            toast.message = message;
+            toast.duration = 2000;
+            toast.position = 'top';
+            toast.color = color;
+            document.body.appendChild(toast);
+            toast.present();
+        });
+    }
+})();
+</script>
+
+{% for customer in customers %}
+<tr id="customer-row-{{ customer.id }}">
+    <td>
+        <div class="d-flex align-center gap-sm">
+            <div class="customer-avatar">
+                <ion-icon name="person"></ion-icon>
+            </div>
+            <div>
+                <span class="fw-medium">{{ customer.name }}</span>
+                <span class="d-block text-secondary fs-xs">{{ customer.tax_id|default:"-" }}</span>
+            </div>
+        </div>
+    </td>
+    <td>
+        <span class="fs-sm">{{ customer.phone|default:"-" }}</span>
+        <span class="d-block text-secondary fs-xs">{{ customer.email|default:"-" }}</span>
+    </td>
+    <td class="cell-right">
+        <span class="fw-semibold text-success">{{ customer.total_spent|floatformat:2 }} EUR</span>
+    </td>
+    <td class="cell-center">
+        <span class="customer-visit-badge">{{ customer.visit_count }}</span>
+    </td>
+    <td class="cell-center text-secondary fs-sm hide-mobile">
+        {% if customer.last_purchase_at %}
+            {{ customer.last_purchase_at|date:"Y-m-d H:i" }}
+        {% else %}
+            -
+        {% endif %}
+    </td>
+    <td>
+        <div class="table-actions">
+            <ion-button size="small" fill="clear"
+                        hx-get="{% url 'customers:detail' customer.id %}"
+                        hx-target="#main-content-area"
+                        hx-push-url="true"
+                        title="{% trans 'View' %}">
+                <ion-icon slot="icon-only" name="eye-outline"></ion-icon>
+            </ion-button>
+            <ion-button size="small" fill="clear"
+                        hx-get="{% url 'customers:edit' customer.id %}"
+                        hx-target="#main-content-area"
+                        hx-push-url="true"
+                        title="{% trans 'Edit' %}">
+                <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+            </ion-button>
+            <ion-button size="small" fill="clear" color="danger"
+                        hx-post="{% url 'customers:delete' customer.id %}"
+                        hx-target="#customer-table-body"
+                        hx-swap="innerHTML"
+                        hx-confirm="{% trans 'Deactivate customer' %} '{{ customer.name }}'?"
+                        hx-include="[name='csrfmiddlewaretoken'], [name='search'], [name='status']"
+                        title="{% trans 'Deactivate' %}">
+                <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+            </ion-button>
+        </div>
+    </td>
+</tr>
+{% empty %}
+<tr id="customer-empty-row">
+    <td colspan="6">
+        <div class="ui-empty-state">
+            <div class="ui-empty-state__icon">
+                <ion-icon name="people-outline"></ion-icon>
+            </div>
+            <h3 class="ui-empty-state__title">{% trans "No customers found" %}</h3>
+            <p class="ui-empty-state__description">{% trans "Create your first customer to get started" %}</p>
+            <ion-button
+                color="success"
+                hx-get="{% url 'customers:create' %}"
+                hx-target="#main-content-area"
+                hx-push-url="true">
+                <ion-icon slot="start" name="person-add-outline"></ion-icon>
+                {% trans "Create First Customer" %}
+            </ion-button>
+        </div>
+    </td>
+</tr>
+{% endfor %}
+
+{% if has_next %}
+{# Infinite scroll trigger - loads more when this element becomes visible #}
+<tr id="load-more-trigger"
+    hx-get="{% url 'customers:list_htmx' %}?page={{ next_page }}"
+    hx-trigger="revealed"
+    hx-swap="outerHTML"
+    hx-include="[name='search'], [name='status']">
+    <td colspan="6">
+        <div class="infinite-scroll-loader">
+            <ion-spinner name="crescent"></ion-spinner>
+        </div>
+    </td>
+</tr>
+{% elif customers %}
+<tr id="end-of-list">
+    <td colspan="6">
+        <div class="infinite-scroll-end">{{ total_count }} {% trans "customers" %}</div>
+    </td>
+</tr>
+{% endif %}

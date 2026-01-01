@@ -1,13 +1,17 @@
 {% load i18n ui component_tags %}
 
-{% if request.htmx %}
-{% component "tabbar" module_id="customers" current_view="list" oob=True %}{% endcomponent %}
-{% endif %}
+{% component "page"
+    title=customer.name
+    module_id="customers"
+    tabbar_view="list"
+    action_icon="create-outline"
+    action_label=_("Edit")
+    action_hx_get="/modules/customers/"|add:customer.id|add:"/edit/"
+    action_hx_target="#main-content-area"
+    action_hx_push_url="true" %}
 
-{% ui_page_header title=customer.name action_icon="create-outline" action_label=_("Edit") action_hx_get="/modules/customers/"|add:customer.id|add:"/edit/" action_hx_target="#main-content-area" action_hx_push_url="true" %}
-
-<div class="ion-padding">
-    {# Customer Status Badge #}
+    {% fill "content" %}
+{# Customer Status Badge #}
     <div class="mb-md">
         {% if customer.is_active %}
         <ion-badge color="success">{% trans "Active" %}</ion-badge>
@@ -147,7 +151,8 @@
         {% endui_card %}
     </div>
 </div>
-</div>
+    {% endfill %}
+{% endcomponent %}
 
 <style>
 .customer-detail-grid {

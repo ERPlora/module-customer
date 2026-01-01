@@ -1,158 +1,41 @@
 {% load i18n ui component_tags %}
 
-{% if request.htmx %}
-{% component "tabbar" module_id="customers" current_view="list" oob=True %}{% endcomponent %}
-{% endif %}
+{% component "page"
+    title=_("Customers")
+    module_id="customers"
+    tabbar_view="list"
+    action_icon="person-add-outline"
+    action_label=_("New Customer")
+    action_hx_get="/modules/customers/create/"
+    action_hx_target="#main-content-area"
+    action_hx_push_url="true" %}
 
-{% ui_page_header title=_("Customers") action_icon="person-add-outline" action_label=_("New Customer") action_hx_get="/modules/customers/create/" action_hx_target="#main-content-area" action_hx_push_url="true" %}
-
-{# Register Alpine.js component BEFORE the HTML that uses it #}
+    {% fill "content" %}
+{# Toast listener for HX-Trigger events #}
 <script>
-// Must define the function immediately so Alpine can find it
-window.customerList = function() {
-    return {
-        customers: [],
-        loading: true,
-        loadingMore: false,
-        searchQuery: '',
-        statusFilter: 'active',
-        searchTimeout: null,
-        currentPage: 1,
-        hasNext: false,
-        totalCount: 0,
+(function() {
+    if (!window._customerToastListenerAdded) {
+        window._customerToastListenerAdded = true;
+        document.body.addEventListener('showToast', function(e) {
+            const detail = e.detail || {};
+            const message = detail.message || 'Done';
+            const color = detail.color || 'success';
 
-        init() {
-            this.loadCustomers();
-        },
-
-        debouncedSearch() {
-            clearTimeout(this.searchTimeout);
-            this.searchTimeout = setTimeout(() => {
-                this.currentPage = 1;
-                this.loadCustomers();
-            }, 300);
-        },
-
-        async loadCustomers() {
-            this.loading = true;
-            this.currentPage = 1;
-            try {
-                const params = new URLSearchParams({
-                    search: this.searchQuery,
-                    status: this.statusFilter,
-                    page: this.currentPage
-                });
-                const response = await fetch(`{% url 'customers:list_ajax' %}?${params}`);
-                const data = await response.json();
-                if (data.success) {
-                    this.customers = data.customers;
-                    this.hasNext = data.has_next;
-                    this.totalCount = data.total_count;
-                    this.$nextTick(() => htmx.process(this.$el));
-                }
-            } catch (error) {
-                console.error('Error loading customers:', error);
-            } finally {
-                this.loading = false;
-            }
-        },
-
-        async loadMore() {
-            if (this.loadingMore || !this.hasNext) return;
-
-            this.loadingMore = true;
-            this.currentPage++;
-
-            try {
-                const params = new URLSearchParams({
-                    search: this.searchQuery,
-                    status: this.statusFilter,
-                    page: this.currentPage
-                });
-                const response = await fetch(`{% url 'customers:list_ajax' %}?${params}`);
-                const data = await response.json();
-                if (data.success) {
-                    this.customers = [...this.customers, ...data.customers];
-                    this.hasNext = data.has_next;
-                    this.$nextTick(() => htmx.process(this.$el));
-                }
-            } catch (error) {
-                console.error('Error loading more customers:', error);
-                this.currentPage--;
-            } finally {
-                this.loadingMore = false;
-            }
-        },
-
-        handleScroll(event) {
-            const el = event.target;
-            const threshold = 100;
-            if (el.scrollHeight - el.scrollTop - el.clientHeight < threshold) {
-                this.loadMore();
-            }
-        },
-
-        formatCurrency(amount) {
-            return new Intl.NumberFormat('es-ES', {
-                style: 'currency',
-                currency: 'EUR'
-            }).format(amount);
-        },
-
-        async confirmDelete(customer) {
-            const alert = document.createElement('ion-alert');
-            alert.header = '{% trans "Confirm" %}';
-            alert.message = `{% trans "Deactivate customer" %} "${customer.name}"?`;
-            alert.buttons = [
-                {
-                    text: '{% trans "Cancel" %}',
-                    role: 'cancel'
-                },
-                {
-                    text: '{% trans "Deactivate" %}',
-                    role: 'destructive',
-                    handler: async () => {
-                        try {
-                            const response = await fetch(`/modules/customers/${customer.id}/delete/`, {
-                                method: 'POST',
-                                headers: {
-                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
-                                }
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                                this.loadCustomers();
-                                const toast = document.createElement('ion-toast');
-                                toast.message = data.message;
-                                toast.duration = 2000;
-                                toast.color = 'success';
-                                toast.position = 'top';
-                                document.body.appendChild(toast);
-                                toast.present();
-                            }
-                        } catch (error) {
-                            console.error('Error:', error);
-                        }
-                    }
-                }
-            ];
-            document.body.appendChild(alert);
-            await alert.present();
-    };
-};
-
-// Re-initialize Alpine for HTMX loaded content
-document.addEventListener('htmx:afterSettle', function(event) {
-    if (event.detail.target.id === 'main-content-area') {
-        const alpineEl = event.detail.target.querySelector('[x-data]');
-        if (alpineEl && !alpineEl._x_dataStack) {
-            Alpine.initTree(alpineEl);
-        }
+            const toast = document.createElement('ion-toast');
+            toast.message = message;
+            toast.duration = 2000;
+            toast.position = 'top';
+            toast.color = color;
+            document.body.appendChild(toast);
+            toast.present();
+        });
     }
-});
+})();
 </script>
 
-<div class="ion-padding" x-data="customerList()">
+{% csrf_token %}
+
+<div id="customer-list-container">
     {# Stats Cards - 4 KPIs for consistency #}
     <ion-row class="mb-md">
         <ion-col size="6" size-md="3">
@@ -175,135 +58,78 @@ document.addEventListener('htmx:afterSettle', function(event) {
     {% ui_card css_class="mb-md" %}
         <div class="d-flex flex-wrap gap-md align-center">
             <ion-searchbar
-                x-model="searchQuery"
-                @ionInput="debouncedSearch()"
+                name="search"
                 placeholder="{% trans 'Search by name, phone, email...' %}"
                 class="flex-1"
                 style="min-width: 200px;"
-                debounce="300">
+                hx-get="{% url 'customers:list_htmx' %}"
+                hx-trigger="ionInput changed delay:300ms"
+                hx-target="#customer-table-body"
+                hx-include="[name='status']">
             </ion-searchbar>
 
-            <ion-segment x-model="statusFilter" @ionChange="loadCustomers()" value="active" style="max-width: 300px;">
-                <ion-segment-button value="active">
+            <ion-segment value="active" style="max-width: 300px;">
+                <ion-segment-button value="active"
+                    hx-get="{% url 'customers:list_htmx' %}?status=active"
+                    hx-trigger="click"
+                    hx-target="#customer-table-body"
+                    hx-include="[name='search']">
                     <ion-label>{% trans "Active" %}</ion-label>
+                    <input type="hidden" name="status" value="active">
                 </ion-segment-button>
-                <ion-segment-button value="inactive">
+                <ion-segment-button value="inactive"
+                    hx-get="{% url 'customers:list_htmx' %}?status=inactive"
+                    hx-trigger="click"
+                    hx-target="#customer-table-body"
+                    hx-include="[name='search']">
                     <ion-label>{% trans "Inactive" %}</ion-label>
                 </ion-segment-button>
-                <ion-segment-button value="all">
+                <ion-segment-button value="all"
+                    hx-get="{% url 'customers:list_htmx' %}?status=all"
+                    hx-trigger="click"
+                    hx-target="#customer-table-body"
+                    hx-include="[name='search']">
                     <ion-label>{% trans "All" %}</ion-label>
                 </ion-segment-button>
             </ion-segment>
         </div>
+        {# Hidden input to track current status filter #}
+        <input type="hidden" name="status" id="current-status" value="active">
     {% endui_card %}
 
     {# Customer List #}
     {% ui_card %}
-        {# Loading #}
-        <template x-if="loading">
-            <div class="d-flex justify-center align-center" style="padding: var(--space-xxl);">
-                <ion-spinner name="crescent"></ion-spinner>
-            </div>
-        </template>
-
-        {# Empty State #}
-        <template x-if="!loading && customers.length === 0">
-            <div class="ui-empty-state">
-                <div class="ui-empty-state__icon">
-                    <ion-icon name="people-outline"></ion-icon>
-                </div>
-                <h3 class="ui-empty-state__title">{% trans "No customers found" %}</h3>
-                <p class="ui-empty-state__description">{% trans "Create your first customer to get started" %}</p>
-                <ion-button
-                    color="success"
-                    hx-get="{% url 'customers:create' %}"
-                    hx-target="#main-content-area"
-                    hx-push-url="true">
-                    <ion-icon slot="start" name="person-add-outline"></ion-icon>
-                    {% trans "Create First Customer" %}
-                </ion-button>
-            </div>
-        </template>
-
-        {# Table with Infinite Scroll #}
-        <template x-if="!loading && customers.length > 0">
-            <div class="data-table-container" @scroll="handleScroll($event)">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>{% trans "Name" %}</th>
-                            <th>{% trans "Contact" %}</th>
-                            <th class="cell-right">{% trans "Total Spent" %}</th>
-                            <th class="cell-center">{% trans "Visits" %}</th>
-                            <th class="cell-center hide-mobile">{% trans "Last Purchase" %}</th>
-                            <th class="cell-actions">{% trans "Actions" %}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="customer in customers" :key="customer.id">
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-center gap-sm">
-                                        <div class="customer-avatar">
-                                            <ion-icon name="person"></ion-icon>
-                                        </div>
-                                        <div>
-                                            <span class="fw-medium" x-text="customer.name"></span>
-                                            <span class="d-block text-secondary fs-xs" x-text="customer.tax_id || '-'"></span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="fs-sm" x-text="customer.phone || '-'"></span>
-                                    <span class="d-block text-secondary fs-xs" x-text="customer.email || '-'"></span>
-                                </td>
-                                <td class="cell-right">
-                                    <span class="fw-semibold text-success" x-text="formatCurrency(customer.total_spent)"></span>
-                                </td>
-                                <td class="cell-center">
-                                    <span class="customer-visit-badge" x-text="customer.visit_count"></span>
-                                </td>
-                                <td class="cell-center text-secondary fs-sm hide-mobile" x-text="customer.last_purchase || '-'"></td>
-                                <td>
-                                    <div class="table-actions">
-                                        <ion-button size="small" fill="clear"
-                                                    :hx-get="'/modules/customers/' + customer.id + '/'"
-                                                    hx-target="#main-content-area"
-                                                    hx-push-url="true"
-                                                    title="{% trans 'View' %}">
-                                            <ion-icon slot="icon-only" name="eye-outline"></ion-icon>
-                                        </ion-button>
-                                        <ion-button size="small" fill="clear"
-                                                    :hx-get="'/modules/customers/' + customer.id + '/edit/'"
-                                                    hx-target="#main-content-area"
-                                                    hx-push-url="true"
-                                                    title="{% trans 'Edit' %}">
-                                            <ion-icon slot="icon-only" name="create-outline"></ion-icon>
-                                        </ion-button>
-                                        <ion-button size="small" fill="clear" color="danger"
-                                                    @click="confirmDelete(customer)"
-                                                    title="{% trans 'Deactivate' %}">
-                                            <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
-                                        </ion-button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                {# Infinite scroll loader #}
-                <template x-if="loadingMore">
-                    <div class="infinite-scroll-loader">
-                        <ion-spinner name="crescent"></ion-spinner>
-                    </div>
-                </template>
-                <template x-if="!hasNext && !loadingMore && customers.length > 0">
-                    <div class="infinite-scroll-end" x-text="totalCount + ' {% trans "customers" %}'"></div>
-                </template>
-            </div>
-        </template>
+        <div class="data-table-container" style="max-height: 60vh; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>{% trans "Name" %}</th>
+                        <th>{% trans "Contact" %}</th>
+                        <th class="cell-right">{% trans "Total Spent" %}</th>
+                        <th class="cell-center">{% trans "Visits" %}</th>
+                        <th class="cell-center hide-mobile">{% trans "Last Purchase" %}</th>
+                        <th class="cell-actions">{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="customer-table-body"
+                       hx-get="{% url 'customers:list_htmx' %}"
+                       hx-trigger="load"
+                       hx-include="[name='status']">
+                    {# Initial loading state #}
+                    <tr id="loading-row">
+                        <td colspan="6">
+                            <div class="d-flex justify-center align-center" style="padding: var(--space-xxl);">
+                                <ion-spinner name="crescent"></ion-spinner>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     {% endui_card %}
 </div>
+    {% endfill %}
+{% endcomponent %}
 
 <style>
 .customer-avatar {
@@ -333,4 +159,29 @@ document.addEventListener('htmx:afterSettle', function(event) {
     font-weight: var(--font-weight-medium);
     min-width: 24px;
 }
+
+.infinite-scroll-loader {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-lg);
+}
+
+.infinite-scroll-end {
+    text-align: center;
+    padding: var(--space-md);
+    color: var(--text-color-secondary);
+    font-size: var(--font-size-sm);
+}
 </style>
+
+<script>
+// Update status hidden input when segment changes
+document.addEventListener('ionChange', function(e) {
+    if (e.target.tagName === 'ION-SEGMENT') {
+        const statusInput = document.getElementById('current-status');
+        if (statusInput) {
+            statusInput.value = e.detail.value;
+        }
+    }
+});
+</script>

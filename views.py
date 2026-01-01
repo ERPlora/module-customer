@@ -8,6 +8,7 @@ from django.utils.translation import gettext as _
 from django.utils import timezone
 from datetime import timedelta
 
+from apps.accounts.decorators import login_required
 from apps.core.htmx import htmx_view
 from .models import Customer, CustomersConfig
 
@@ -39,6 +40,7 @@ def customer_list(request):
 def customer_list_ajax(request):
     """
     API: Lista de clientes para AJAX con infinite scroll.
+    DEPRECATED: Use customer_list_htmx instead.
     """
     from apps.core.htmx import InfiniteScrollPaginator
 
@@ -94,6 +96,61 @@ def customer_list_ajax(request):
         'next_page': page_data['next_page'],
         'total_count': page_data['total_count'],
         'page_number': page_data['page_number'],
+    })
+
+
+def _get_filtered_customers(request):
+    """Helper to get filtered customers queryset."""
+    from apps.core.htmx import InfiniteScrollPaginator
+
+    search = request.GET.get('search', '') or request.POST.get('search', '')
+    search = search.strip()
+    status_filter = request.GET.get('status', '') or request.POST.get('status', 'active')
+
+    customers = Customer.objects.all()
+
+    # Filter by status
+    if status_filter == 'active':
+        customers = customers.filter(is_active=True)
+    elif status_filter == 'inactive':
+        customers = customers.filter(is_active=False)
+
+    # Search
+    if search:
+        customers = customers.filter(
+            Q(name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search) |
+            Q(tax_id__icontains=search)
+        )
+
+    # Order
+    customers = customers.order_by('-created_at')
+
+    # Pagination with infinite scroll
+    per_page = int(request.GET.get('per_page', '25'))
+    paginator = InfiniteScrollPaginator(customers, per_page=per_page)
+    page_num = request.GET.get('page', '1')
+    page_data = paginator.get_page(page_num)
+
+    return page_data
+
+
+@require_http_methods(["GET"])
+def customer_list_htmx(request):
+    """
+    HTMX: Lista de clientes con infinite scroll (server-rendered).
+    Returns HTML partial with customer rows.
+    """
+    from django.shortcuts import render
+
+    page_data = _get_filtered_customers(request)
+
+    return render(request, 'customers/partials/customer_rows.html', {
+        'customers': page_data['items'],
+        'has_next': page_data['has_next'],
+        'next_page': page_data['next_page'],
+        'total_count': page_data['total_count'],
     })
 
 
@@ -206,19 +263,50 @@ def customer_edit(request, customer_id):
 def customer_delete(request, customer_id):
     """
     API: Eliminar un cliente (soft delete).
+    Supports both HTMX and JSON responses.
     """
+    from django.shortcuts import render
+    import json
+
+    is_htmx = request.headers.get('HX-Request')
+
     try:
         customer = get_object_or_404(Customer, id=customer_id)
+        customer_name = customer.name
         customer.is_active = False
         customer.save()
 
+        success_msg = _('Customer deactivated successfully')
+
+        if is_htmx:
+            # Return updated customer list
+            page_data = _get_filtered_customers(request)
+            response = render(request, 'customers/partials/customer_rows.html', {
+                'customers': page_data['items'],
+                'has_next': page_data['has_next'],
+                'next_page': page_data['next_page'],
+                'total_count': page_data['total_count'],
+            })
+            response['HX-Trigger'] = json.dumps({
+                'showToast': {'message': success_msg, 'color': 'success'}
+            })
+            return response
+
         return JsonResponse({
             'success': True,
-            'message': _('Cliente desactivado correctamente')
+            'message': success_msg
         })
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        error_msg = str(e)
+        if is_htmx:
+            from django.http import HttpResponse
+            response = HttpResponse(status=422)
+            response['HX-Trigger'] = json.dumps({
+                'showToast': {'message': error_msg, 'color': 'danger'}
+            })
+            return response
+        return JsonResponse({'success': False, 'error': error_msg})
 
 
 @require_http_methods(["POST"])
@@ -274,6 +362,7 @@ def customers_export(request):
 @htmx_view('customers/pages/settings.html', 'customers/partials/settings_content.html')
 def customers_settings(request):
     """Settings view for the Customers module."""
+    from django.urls import reverse
     config = CustomersConfig.get_config()
 
     # Sort options for the select component
@@ -288,6 +377,8 @@ def customers_settings(request):
         'config': config,
         'sort_options': sort_options,
         'page_title': _('Settings'),
+        'customers_toggle_url': reverse('customers:settings_toggle'),
+        'customers_select_url': reverse('customers:settings_select'),
     }
 
 
@@ -311,3 +402,71 @@ def customers_settings_save(request):
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@require_http_methods(["POST"])
+@login_required
+def customers_settings_toggle(request):
+    """Toggle a single setting via HTMX."""
+    # Support both 'name'/'value' (new components) and 'setting_name'/'setting_value' (legacy)
+    name = request.POST.get('name') or request.POST.get('setting_name')
+    value = request.POST.get('value', request.POST.get('setting_value', 'false'))
+    setting_value = value == 'true' or value is True
+
+    config = CustomersConfig.get_config()
+
+    boolean_settings = ['require_phone', 'require_email', 'require_tax_id',
+                       'show_inactive', 'include_stats_in_export']
+
+    if name in boolean_settings:
+        setattr(config, name, setting_value)
+        config.save()
+
+    response = HttpResponse(status=204)
+    response['HX-Trigger'] = json.dumps({
+        'showToast': {'message': str(_('Setting updated')), 'color': 'success'}
+    })
+    return response
+
+
+@require_http_methods(["POST"])
+@login_required
+def customers_settings_select(request):
+    """Update a select setting via HTMX."""
+    # Support both 'name'/'value' (new components) and 'setting_name'/'setting_value' (legacy)
+    name = request.POST.get('name') or request.POST.get('setting_name')
+    value = request.POST.get('value') or request.POST.get('setting_value')
+
+    config = CustomersConfig.get_config()
+
+    if name == 'default_sort':
+        config.default_sort = value
+        config.save()
+
+    response = HttpResponse(status=204)
+    response['HX-Trigger'] = json.dumps({
+        'showToast': {'message': str(_('Setting updated')), 'color': 'success'}
+    })
+    return response
+
+
+@require_http_methods(["POST"])
+@login_required
+def customers_settings_reset(request):
+    """Reset all settings to defaults via HTMX."""
+    config = CustomersConfig.get_config()
+
+    config.require_phone = False
+    config.require_email = False
+    config.require_tax_id = False
+    config.show_inactive = False
+    config.default_sort = 'name'
+    config.include_stats_in_export = True
+    config.save()
+
+    response = HttpResponse(status=204)
+    response['HX-Trigger'] = json.dumps({
+        'showToast': {'message': str(_('Settings reset to defaults')), 'color': 'warning'},
+        'refreshPage': True
+    })
+    return response
