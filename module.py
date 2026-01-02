@@ -18,8 +18,8 @@ MODULE_INDUSTRIES = [
     "retail",       # Retail stores
     "wholesale",    # Wholesale distributors
     "restaurant",   # Restaurants
-    "salon",        # Beauty & wellness
-    "professional", # Professional services
+    "beauty",       # Beauty & wellness
+    "consulting",   # Professional services
     "ecommerce",    # E-commerce
 ]
 
