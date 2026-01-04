@@ -18,6 +18,8 @@ MODULE_INDUSTRIES = [
     "retail",       # Retail stores
     "wholesale",    # Wholesale distributors
     "restaurant",   # Restaurants
+    "bar",          # Bars & pubs
+    "cafe",         # Cafes & bakeries
     "beauty",       # Beauty & wellness
     "consulting",   # Professional services
     "ecommerce",    # E-commerce
@@ -57,12 +59,38 @@ NAVIGATION = [
 DEPENDENCIES = []
 
 # Default Settings
-SETTINGS = {}
+SETTINGS = {
+    "require_email": False,
+    "require_phone": False,
+    "allow_duplicates": False,
+}
 
 # Permissions
+# Format: (action_suffix, display_name) -> becomes "customers.action_suffix"
 PERMISSIONS = [
-    "customers.view_customer",
-    "customers.add_customer",
-    "customers.change_customer",
-    "customers.delete_customer",
+    ("view_customer", _("Can view customers")),
+    ("add_customer", _("Can add customers")),
+    ("change_customer", _("Can edit customers")),
+    ("delete_customer", _("Can delete customers")),
+    ("export_customer", _("Can export customers")),
+    ("import_customer", _("Can import customers")),
 ]
+
+# Role Permissions - Default permissions for each system role in this module
+# Keys are role names, values are lists of permission suffixes (without module prefix)
+# Use ["*"] to grant all permissions in this module
+ROLE_PERMISSIONS = {
+    "admin": ["*"],  # Full access to all customer permissions
+    "manager": [
+        "view_customer",
+        "add_customer",
+        "change_customer",
+        "export_customer",
+        "import_customer",
+    ],
+    "employee": [
+        "view_customer",
+        "add_customer",
+        "change_customer",
+    ],
+}
